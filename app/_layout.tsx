@@ -1,24 +1,172 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Colors } from "@/constants/theme";
+import { isNetworkRequestFailure, shouldRetryQuery } from "@/lib/network-errors";
+import { persistQueryCache, restoreQueryCache } from "@/lib/query-persister";
+import {
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+} from "@expo-google-fonts/manrope";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React, { useEffect, useRef } from "react";
+import { LogBox, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// ── Suppress "Network request failed" from ever showing a red LogBox ──
+LogBox.ignoreLogs(["Network request failed"]);
 
-export const unstable_settings = {
-  anchor: '(tabs)',
+// ── Catch unhandled promise rejections caused by network errors ──
+const originalHandler = (globalThis as any).ErrorUtils?.getGlobalHandler?.();
+if ((globalThis as any).ErrorUtils) {
+  (globalThis as any).ErrorUtils.setGlobalHandler(
+    (error: any, isFatal?: boolean) => {
+      if (!isFatal && isNetworkRequestFailure(error)) {
+        // Silently swallow non-fatal network errors
+        return;
+      }
+      originalHandler?.(error, isFatal);
+    },
+  );
+}
+
+// ── Also intercept console.error so network errors never escalate ──
+const _origConsoleError = console.error;
+console.error = (...args: any[]) => {
+  if (
+    args.length > 0 &&
+    (isNetworkRequestFailure(args[0]) ||
+      (typeof args[0] === "string" &&
+        /network request failed/i.test(args[0])))
+  ) {
+    // Downgrade to warn so it doesn't trigger LogBox
+    console.warn("[network]", ...args);
+    return;
+  }
+  _origConsoleError(...args);
 };
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes — data stays "fresh" this long
+      gcTime: 1000 * 60 * 30, // 30 minutes — keep in memory longer
+      retry: shouldRetryQuery,
+      refetchOnWindowFocus: false,
+      refetchOnMount: "always", // silently refetch in background on mount
+    },
+  },
+});
+
+type SuperwallProviderProps = {
+  apiKeys: {
+    ios: string | undefined;
+    android: string | undefined;
+  };
+  onConfigurationError: (error: unknown) => void;
+  children: React.ReactNode;
+};
+
+let RuntimeSuperwallProvider: React.ComponentType<SuperwallProviderProps> | null =
+  null;
+try {
+  const superwall = require("expo-superwall") as {
+    SuperwallProvider?: React.ComponentType<SuperwallProviderProps>;
+  };
+  if (superwall.SuperwallProvider) {
+    RuntimeSuperwallProvider = superwall.SuperwallProvider;
+  }
+} catch {
+  RuntimeSuperwallProvider = null;
+}
+
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const [fontsLoaded, fontError] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+  });
+
+  // Restore cached query data on cold start for instant UI
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!restored.current) {
+      restored.current = true;
+      restoreQueryCache(queryClient);
+    }
+  }, []);
+
+  // Persist cache periodically when queries update
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      persistTimer.current = setTimeout(() => {
+        persistQueryCache(queryClient);
+      }, 2000); // debounce 2s
+    });
+    return () => {
+      unsubscribe();
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
+  }, []);
+
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background }} />
+    );
+  }
+
+  const appContent = (
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: Colors.background },
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="paywall" />
+          <Stack.Screen name="scan-result" />
+          <Stack.Screen name="create-account" />
+          <Stack.Screen name="try-free" />
+          <Stack.Screen name="reminder-promise" />
+          <Stack.Screen name="trial-timeline" />
+          <Stack.Screen name="gut-score" />
+          <Stack.Screen name="improve-gut" />
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="profile/edit-profile" />
+          <Stack.Screen name="profile/notifications" />
+          <Stack.Screen name="profile/privacy" />
+          <Stack.Screen name="profile/terms-of-use" />
+        </Stack>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
+  );
+
+  if (!RuntimeSuperwallProvider) {
+    return appContent;
+  }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <RuntimeSuperwallProvider
+      apiKeys={{
+        ios: process.env.EXPO_PUBLIC_SUPERWALL_IOS_KEY,
+        android: process.env.EXPO_PUBLIC_SUPERWALL_ANDROID_KEY,
+      }}
+      onConfigurationError={(error: unknown) => {
+        console.error("Superwall configuration error:", error);
+      }}
+    >
+      {appContent}
+    </RuntimeSuperwallProvider>
   );
 }
