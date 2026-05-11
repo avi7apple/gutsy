@@ -113,6 +113,7 @@ async function fetchWeekData(): Promise<Omit<WeekDataResult, 'totalDays'>> {
     .from("meal_scans")
     .select("gut_score, bloat_score, analysis, created_at")
     .eq("user_id", user.id)
+    .eq("logged_as_eaten", true)
     .gte("created_at", weekStart.toISOString())
     .lte("created_at", weekEnd.toISOString());
 
@@ -178,11 +179,12 @@ export function useWeekData(): WeekDataResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["weekData"],
     queryFn: fetchWeekData,
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
     retry: shouldRetryQuery,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
+    refetchOnMount: false,
+    refetchOnReconnect: true,
     initialData: {
       weekData: defaultWeek,
       todayIndex: defaultTodayIndex >= 0 ? defaultTodayIndex : 0,
@@ -191,14 +193,19 @@ export function useWeekData(): WeekDataResult {
       error: null,
       refetch: () => {},
     },
-    // Enable background refetching for real-time updates
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchInterval: 1000 * 60 * 5,
   });
 
+  // Ensure dateObj is properly reconstructed as Date objects after cache retrieval
+  const weekData = (data?.weekData ?? defaultWeek).map(item => ({
+    ...item,
+    dateObj: new Date(item.dateObj),
+  }));
+
   return {
-    weekData: data!.weekData,
-    todayIndex: data!.todayIndex,
-    trackedCount: data!.trackedCount,
+    weekData,
+    todayIndex: data?.todayIndex ?? defaultTodayIndex,
+    trackedCount: data?.trackedCount ?? 0,
     totalDays: 7,
     isLoading,
     error: error instanceof Error ? error : null,

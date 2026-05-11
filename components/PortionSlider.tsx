@@ -1,11 +1,11 @@
-import { Colors, Fonts, Spacing, BorderRadius } from "@/constants/theme";
+import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { rf } from "@/lib/hooks/use-responsive";
 import React, { useState } from "react";
 import {
-  GestureResponderEvent,
-  PanResponder,
-  StyleSheet,
-  Text,
-  View,
+    PanResponder,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 
 interface PortionSliderProps {
@@ -185,13 +185,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   valueText: {
-    fontSize: 24,
+    fontSize: rf(24),
     fontWeight: '600',
     color: Colors.text,
     fontFamily: Fonts.scoreNumber,
   },
   unitText: {
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
     fontFamily: Fonts.body,
   },
@@ -200,14 +200,14 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   ingredientName: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '500',
     color: Colors.text,
     textAlign: 'center',
     fontFamily: Fonts.productName,
   },
   referenceText: {
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
     fontStyle: 'italic',
     marginTop: 2,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   rangeText: {
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textMuted,
     fontFamily: Fonts.body,
   },

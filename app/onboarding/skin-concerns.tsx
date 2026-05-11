@@ -1,19 +1,20 @@
+import OnboardingButton from "@/components/onboarding/OnboardingButton";
+import ProgressBar from "@/components/onboarding/ProgressBar";
+import { Fonts, ONBOARDING_TOTAL_STEPS, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
+import { saveOnboardingSkinConcern } from "@/lib/onboarding-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  StatusBar,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import ProgressBar from "@/components/onboarding/ProgressBar";
-import OnboardingButton from "@/components/onboarding/OnboardingButton";
-import { saveOnboardingSkinConcern } from "@/lib/onboarding-storage";
-import { Fonts, Spacing, Shadows, OnboardingButtonBar, ONBOARDING_TOTAL_STEPS } from "@/constants/theme";
 
 const CONCERNS = [
   { id: "acne", label: "Acne or breakouts" },
@@ -28,6 +29,9 @@ const CURRENT_STEP = 12;
 export default function SkinConcernsScreen() {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
 
   const handleBack = () => {
     router.back();
@@ -66,10 +70,12 @@ export default function SkinConcernsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
+        <View
+          style={[styles.header, isCompactScreen ? styles.headerCompact : undefined, isSmallScreen ? styles.headerTight : undefined]}
+        >
           <TouchableOpacity
             onPress={handleBack}
-            style={styles.backButton}
+            style={[styles.backButton, isSmallScreen ? styles.backButtonTight : undefined]}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="arrow-back" size={24} color="#2E2E2E" />
@@ -85,12 +91,26 @@ export default function SkinConcernsScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isCompactScreen ? styles.scrollContentCompact : undefined,
+            isSmallScreen ? styles.scrollContentTight : undefined,
+          ]}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Any skin concerns?</Text>
+          <Text
+            style={[styles.title, isCompactScreen ? styles.titleCompact : undefined, isSmallScreen ? styles.titleTight : undefined]}
+          >
+            Any skin concerns?
+          </Text>
 
-          <View style={styles.cards}>
+          <View
+            style={[
+              styles.cards,
+              isCompactScreen ? styles.cardsCompact : undefined,
+              isSmallScreen ? styles.cardsTight : undefined,
+            ]}
+          >
             {CONCERNS.map((concern) => {
               const isSelected = selectedIds.has(concern.id);
               return (
@@ -98,21 +118,33 @@ export default function SkinConcernsScreen() {
                   key={concern.id}
                   activeOpacity={0.8}
                   onPress={() => toggleConcern(concern.id)}
-                  style={[styles.card, isSelected && styles.cardSelected]}
+                  style={[
+                    styles.card,
+                    isCompactScreen ? styles.cardCompact : undefined,
+                    isSmallScreen ? styles.cardTight : undefined,
+                    isSelected && styles.cardSelected,
+                  ]}
                 >
-                  <Text style={styles.cardLabel}>{concern.label}</Text>
+                  <Text style={[styles.cardLabel, isSmallScreen ? styles.cardLabelTight : undefined]}>{concern.label}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
         </ScrollView>
 
-        <View style={styles.buttonContainer}>
+        <View
+          style={[
+            styles.buttonContainer,
+            isCompactScreen ? styles.buttonContainerCompact : undefined,
+            isSmallScreen ? styles.buttonContainerTight : undefined,
+          ]}
+        >
           <OnboardingButton
             title="Continue"
             onPress={handleContinue}
             disabled={!hasSelection}
             style={styles.continueButton}
+            textStyle={isSmallScreen ? styles.buttonLabelTight : undefined}
             disabledBackgroundColor="#A8B8AD"
           />
         </View>
@@ -132,17 +164,32 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl,
-    gap: Spacing.lg,
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.md),
+    paddingBottom: rs(Spacing.xl),
+    gap: rs(Spacing.lg),
+  },
+  headerCompact: {
+    paddingHorizontal: rs(Spacing.md),
+    paddingBottom: rs(Spacing.lg),
+  },
+  headerTight: {
+    paddingHorizontal: rs(Spacing.md),
+    paddingTop: rs(Spacing.sm),
+    paddingBottom: rs(Spacing.lg),
+    gap: rs(Spacing.md),
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     alignItems: "center",
     justifyContent: "center",
+  },
+  backButtonTight: {
+    width: rs(38),
+    height: rs(38),
+    borderRadius: rs(19),
   },
   progressWrapper: {
     flex: 1,
@@ -151,44 +198,97 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.xxxl,
-    paddingBottom: Spacing.xxl,
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.xxxl),
+    paddingBottom: rs(Spacing.xxl),
     flexGrow: 1,
+  },
+  scrollContentCompact: {
+    paddingHorizontal: rs(Spacing.xl),
+    paddingTop: rs(Spacing.xxl),
+  },
+  scrollContentTight: {
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.xxxl * 2),
+    paddingBottom: rs(Spacing.xxl),
+    alignItems: "center",
   },
   title: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 24,
+    fontSize: rf(24),
     color: "#2E2E2E",
-    marginBottom: Spacing.xxxl,
-    lineHeight: 32,
+    marginBottom: rs(Spacing.xxxl),
+    lineHeight: rf(32),
+  },
+  titleCompact: {
+    fontSize: rf(22),
+    marginBottom: rs(Spacing.xxl),
+    textAlign: "center",
+  },
+  titleTight: {
+    fontSize: rf(18),
+    lineHeight: rf(26),
+    marginBottom: rs(Spacing.xxxl),
+    textAlign: "center",
   },
   cards: {
-    gap: Spacing.xl,
-    marginBottom: Spacing.xl,
+    gap: rs(Spacing.xl),
+    marginBottom: rs(Spacing.xl),
+  },
+  cardsCompact: {
+    gap: rs(Spacing.lg),
+  },
+  cardsTight: {
+    gap: rs(Spacing.xl),
+    alignSelf: "stretch",
   },
   card: {
     backgroundColor: "#FFFFFF",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xxl,
-    borderRadius: 16,
+    paddingVertical: rs(Spacing.xl),
+    paddingHorizontal: rs(Spacing.xxl),
+    borderRadius: rs(16),
     borderWidth: 1,
     borderColor: "#E5E7EB",
     ...Shadows.sm,
+  },
+  cardCompact: {
+    paddingVertical: rs(Spacing.lg),
+    paddingHorizontal: rs(Spacing.xl),
+  },
+  cardTight: {
+    paddingVertical: rs(Spacing.lg + 2),
+    paddingHorizontal: rs(Spacing.xl),
+    borderRadius: rs(16),
   },
   cardSelected: {
     borderColor: "#325C3A",
   },
   cardLabel: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#2E2E2E",
-    lineHeight: 22,
+    lineHeight: rf(22),
+  },
+  cardLabelTight: {
+    fontSize: rf(13),
   },
   buttonContainer: {
-    ...OnboardingButtonBar,
+    paddingTop: rs(OnboardingButtonBar.paddingTop),
+    paddingBottom: rs(OnboardingButtonBar.paddingBottom),
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal),
+  },
+  buttonContainerCompact: {
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal - Spacing.sm),
+  },
+  buttonContainerTight: {
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal - Spacing.md),
+    paddingBottom: rs(OnboardingButtonBar.paddingBottom - Spacing.sm),
   },
   continueButton: {
     ...Shadows.md,
+  },
+  buttonLabelTight: {
+    fontSize: rf(13),
+    lineHeight: rf(18),
   },
 });

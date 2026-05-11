@@ -37,6 +37,22 @@ export interface PortionLearningPrior {
   sampleCount: number;
 }
 
+export interface VisualPortionPrior {
+  ingredientName: string;
+  conversionFactor: number;
+  sampleCount: number;
+  confidence: number;
+}
+
+export interface CameraCaptureMetadata {
+  width?: number;
+  height?: number;
+  hasDepthData?: boolean;
+  focalLengthMm?: number;
+  digitalZoomRatio?: number;
+  subjectDistanceM?: number;
+}
+
 /** Meal component analysis result */
 export interface MealComponent {
   ingredient: DetectedIngredient;
@@ -152,10 +168,21 @@ export interface ScanAnalysis {
   servings_per_container?: number;
   /** Cached LLM ingredient analysis for Ingredients tab */
   ingredientAnalysis?: {
-    items: Array<{ displayName: string; impact: "negative" | "moderate" | "positive"; whyMatters: string }>;
+    items: Array<{
+      displayName: string;
+      impact: "negative" | "moderate" | "positive";
+      whyMatters: string;
+      tier?: "main" | "supporting" | "micro";
+      estimatedGrams?: number;
+    }>;
     redCount: number;
     yellowCount: number;
     greenCount: number;
+    tierCounts?: {
+      main: number;
+      supporting: number;
+      micro: number;
+    };
   };
 }
 
@@ -215,6 +242,10 @@ export interface AnalyzeScanRequest {
   barcode?: string;
   /** Optional learned priors injected from user correction history */
   learnedPortionPriors?: PortionLearningPrior[];
+  /** Optional visual-area priors from user corrections (sample_count >= 2 only) */
+  visualPortionPriors?: VisualPortionPrior[];
+  /** Optional camera metadata from capture for real-world portion scaling */
+  cameraMetadata?: CameraCaptureMetadata;
   /** Meal-specific request data */
   mealDetection?: {
     enableMealDetection: boolean;

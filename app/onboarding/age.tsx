@@ -1,23 +1,24 @@
-import React, { useRef, useState, useCallback, useEffect } from "react";
+import OnboardingButton from "@/components/onboarding/OnboardingButton";
+import ProgressBar from "@/components/onboarding/ProgressBar";
+import { Fonts, ONBOARDING_TOTAL_STEPS, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   SafeAreaView,
-  TouchableOpacity,
   ScrollView,
   StatusBar,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import ProgressBar from "@/components/onboarding/ProgressBar";
-import OnboardingButton from "@/components/onboarding/OnboardingButton";
-import { Fonts, Spacing, Shadows, OnboardingButtonBar, ONBOARDING_TOTAL_STEPS } from "@/constants/theme";
 
 const AGES = Array.from({ length: 88 }, (_, i) => i + 13);
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = rs(52);
 const VISIBLE_ROWS = 5;
 const WHEEL_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS;
 const DEFAULT_AGE = 25;
@@ -28,6 +29,9 @@ export default function AgeScreen() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const [selectedAge, setSelectedAge] = useState<number | null>(null);
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -82,10 +86,12 @@ export default function AgeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
+        <View
+          style={[styles.header, isCompactScreen ? styles.headerCompact : undefined, isSmallScreen ? styles.headerTight : undefined]}
+        >
           <TouchableOpacity
             onPress={handleBack}
-            style={styles.backButton}
+            style={[styles.backButton, isSmallScreen ? styles.backButtonTight : undefined]}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="arrow-back" size={24} color="#2E2E2E" />
@@ -99,10 +105,16 @@ export default function AgeScreen() {
           </View>
         </View>
 
-        <View style={styles.content}>
-          <Text style={styles.title}>What is your age?</Text>
+        <View
+          style={[styles.content, isCompactScreen ? styles.contentCompact : undefined, isSmallScreen ? styles.contentTight : undefined]}
+        >
+          <Text
+            style={[styles.title, isCompactScreen ? styles.titleCompact : undefined, isSmallScreen ? styles.titleTight : undefined]}
+          >
+            What is your age?
+          </Text>
 
-          <View style={styles.wheelWrapper}>
+          <View style={[styles.wheelWrapper, isSmallScreen ? styles.wheelWrapperTight : undefined]}>
             <View style={styles.wheelHighlight} pointerEvents="none" />
             <ScrollView
               ref={scrollRef}
@@ -119,10 +131,11 @@ export default function AgeScreen() {
             >
               <View style={styles.wheelSpacer} />
               {AGES.map((age) => (
-                <View key={age} style={styles.wheelRow}>
+                <View key={age} style={[styles.wheelRow, isSmallScreen ? styles.wheelRowTight : undefined]}>
                   <Text
                     style={[
                       styles.wheelRowText,
+                      isSmallScreen ? styles.wheelRowTextTight : undefined,
                       selectedAge === age && styles.wheelRowTextSelected,
                     ]}
                   >
@@ -135,7 +148,9 @@ export default function AgeScreen() {
           </View>
 
           {selectedAge !== null && (
-            <Text style={styles.selectedLabel}>Selected: {selectedAge} years</Text>
+            <Text style={[styles.selectedLabel, isSmallScreen ? styles.selectedLabelTight : undefined]}>
+              Selected: {selectedAge} years
+            </Text>
           )}
         </View>
 
@@ -164,41 +179,74 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl,
-    gap: Spacing.lg,
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.md),
+    paddingBottom: rs(Spacing.xl),
+    gap: rs(Spacing.lg),
+  },
+  headerCompact: {
+    paddingHorizontal: rs(Spacing.md),
+  },
+  headerTight: {
+    paddingHorizontal: rs(Spacing.md),
+    paddingTop: rs(Spacing.sm),
+    paddingBottom: rs(Spacing.lg),
+    gap: rs(Spacing.md),
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     alignItems: "center",
     justifyContent: "center",
+  },
+  backButtonTight: {
+    width: rs(38),
+    height: rs(38),
+    borderRadius: rs(19),
   },
   progressWrapper: {
     flex: 1,
   },
   content: {
     flex: 1,
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.xxxl,
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.xxxl),
     alignItems: "center",
+  },
+  contentCompact: {
+    paddingHorizontal: rs(Spacing.xl),
+  },
+  contentTight: {
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.xxxl * 1.6),
   },
   title: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 24,
+    fontSize: rf(24),
     color: "#2E2E2E",
-    marginBottom: Spacing.xxxl,
-    lineHeight: 32,
+    marginBottom: rs(Spacing.xxxl),
+    lineHeight: rf(32),
     textAlign: "center",
+  },
+  titleCompact: {
+    fontSize: rf(22),
+    marginBottom: rs(Spacing.xxl),
+  },
+  titleTight: {
+    fontSize: rf(18),
+    lineHeight: rf(26),
+    marginBottom: rs(Spacing.xxxl),
   },
   wheelWrapper: {
     width: "100%",
-    maxWidth: 200,
+    maxWidth: rs(200),
     height: WHEEL_HEIGHT,
     position: "relative",
-    marginBottom: Spacing.xxxl,
+    marginBottom: rs(Spacing.xxxl),
+  },
+  wheelWrapperTight: {
+    maxWidth: rs(180),
   },
   wheelHighlight: {
     position: "absolute",
@@ -229,24 +277,30 @@ const styles = StyleSheet.create({
   },
   wheelRowText: {
     fontFamily: Fonts.body,
-    fontSize: 20,
+    fontSize: rf(20),
     color: "#000000",
   },
   wheelRowTextSelected: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 24,
+    fontSize: rf(24),
     color: "#000000",
   },
   selectedLabel: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#6B7280",
-    marginBottom: Spacing.xl,
+    marginBottom: rs(Spacing.xl),
+  },
+  selectedLabelTight: {
+    fontSize: rf(14),
   },
   bottomSection: {
-    paddingHorizontal: OnboardingButtonBar.paddingHorizontal,
-    paddingTop: OnboardingButtonBar.paddingTop,
-    paddingBottom: OnboardingButtonBar.paddingBottom,
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal),
+    paddingTop: rs(OnboardingButtonBar.paddingTop),
+    paddingBottom: rs(OnboardingButtonBar.paddingBottom),
+  },
+  bottomSectionTight: {
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal - Spacing.md),
   },
   continueButton: {
     backgroundColor: "#325C3A",

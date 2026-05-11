@@ -1,4 +1,4 @@
-import { FadeIn, Shimmer, ShimmerCircle } from "@/components/SkeletonCard";
+import { FadeIn, ProfileSkeleton, Shimmer, ShimmerCircle } from "@/components/SkeletonCard";
 import { AnimatedNumber, SmoothScale } from "@/components/SmoothUpdate";
 import {
     BorderRadius,
@@ -7,6 +7,8 @@ import {
     Shadows,
     Spacing,
 } from "@/constants/theme";
+import { useAuthUserQuery } from "@/lib/hooks/use-auth-user-query";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { shouldRetryQuery } from "@/lib/network-errors";
 import { getOnboardingProfile } from "@/lib/onboarding-storage";
 import { supabase } from "@/lib/supabase";
@@ -38,16 +40,15 @@ interface UserProfile {
   scan_stats: any | null;
 }
 
-async function fetchProfile() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+async function fetchProfile(userId: string) {
+  if (!userId) {
     return null;
   }
 
   const { data, error } = await supabase
     .from("user_profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   if (error && error.code !== "PGRST116") {
@@ -57,8 +58,10 @@ async function fetchProfile() {
   return data || null;
 }
 
-async function fetchUserData() {
-  const { data: { user } } = await supabase.auth.getUser();
+async function fetchUserData(
+  user: ReturnType<typeof useAuthUserQuery>["user"],
+  profile: ReturnType<typeof useAuthUserQuery>["profile"]
+) {
   if (!user) {
     return {
       email: null,
@@ -67,51 +70,46 @@ async function fetchUserData() {
     };
   }
 
-  const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || null;
-  
-  let memberSince = null;
-  if (user.created_at) {
-    const createdDate = new Date(user.created_at);
-    memberSince = createdDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  }
-
   return {
-    email: user.email || null,
-    userName: fullName,
-    memberSince,
+    email: user.email ?? null,
+    userName: profile.firstName || null,
+    memberSince: profile.memberSince,
   };
 }
 
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, profile: authProfile, isLoading: isAuthLoading } = useAuthUserQuery();
   
   const { data: profile, refetch: refetchProfile } = useQuery({
-    queryKey: ["userProfile"],
-    queryFn: fetchProfile,
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 10,
+    queryKey: ["userProfile", user?.id ?? "anon"],
+    queryFn: () => fetchProfile(user!.id),
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60,
     retry: shouldRetryQuery,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
-    // Enable background refetching for real-time updates
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchOnMount: false,
+    refetchOnReconnect: true,
+    refetchInterval: 1000 * 60 * 5,
   });
 
   const { data: userData } = useQuery({
-    queryKey: ["userData"],
-    queryFn: fetchUserData,
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 15,
+    queryKey: ["userData", user?.id ?? "anon"],
+    queryFn: () => fetchUserData(user, authProfile),
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60,
     retry: shouldRetryQuery,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
-    // Enable background refetching for real-time updates
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchOnMount: false,
+    refetchOnReconnect: true,
+    refetchInterval: 1000 * 60 * 5,
   });
 
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const showInitialSkeleton = isAuthLoading && !userData;
 
   useEffect(() => {
     getOnboardingProfile().then(setOnboardingProfile);
@@ -289,8 +287,20 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]} > 
       <StatusBar style="dark" />
+      {showInitialSkeleton ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Profile</Text>
+          </View>
+          <ProfileSkeleton />
+        </ScrollView>
+      ) : (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -434,6 +444,7 @@ export default function ProfileScreen() {
               })}
             </View>
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -456,21 +467,21 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 28,
+    fontSize: rf(28),
     color: Colors.text,
   },
   personalInfoContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: 24,
-    paddingBottom: 20,
-    marginBottom: 4,
-    gap: 16,
+    paddingTop: rs(24),
+    paddingBottom: rs(20),
+    marginBottom: rs(4),
+    gap: rs(16),
   },
   avatarContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: rs(72),
+    height: rs(72),
+    borderRadius: rs(36),
     backgroundColor: Colors.primary,
     borderWidth: 3,
     borderColor: "#FFFFFF",
@@ -484,7 +495,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: rf(28),
     fontWeight: "800",
     color: "#FFFFFF",
     fontFamily: Fonts.body,
@@ -494,16 +505,16 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 24,
+    fontSize: rf(24),
     fontWeight: "800",
     color: "#1A1A1A",
-    marginBottom: 4,
+    marginBottom: rs(4),
     letterSpacing: 0,
     maxWidth: "100%",
   },
   membershipInfo: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     fontWeight: "500",
     color: "#95918A",
   },
@@ -513,18 +524,18 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   profileRowEmoji: {
-    fontSize: 18,
+    fontSize: rf(18),
   },
   profileRowLabel: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
-    minWidth: 100,
+    minWidth: rs(100),
   },
   profileRowValue: {
     flex: 1,
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
   },
   profileCardDivider: {
@@ -544,7 +555,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: Fonts.sectionHeader,
-    fontSize: 18,
+    fontSize: rf(18),
     color: Colors.text,
     marginBottom: Spacing.md,
   },
@@ -557,13 +568,13 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontFamily: Fonts.statsGridValue,
-    fontSize: 24,
+    fontSize: rf(24),
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
   statLabel: {
     fontFamily: Fonts.statsGridLabel,
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
     textAlign: "center",
   },
@@ -584,9 +595,9 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   settingIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: rs(32),
+    height: rs(32),
+    borderRadius: rs(16),
     backgroundColor: Colors.background,
     justifyContent: "center",
     alignItems: "center",
@@ -597,14 +608,14 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
   },
   settingValue: {
     fontFamily: Fonts.body,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: rs(2),
   },
   accountCard: {
     backgroundColor: Colors.surface,

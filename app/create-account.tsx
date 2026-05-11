@@ -1,18 +1,28 @@
-import { BorderRadius, Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { BorderRadius, Colors, Fonts, Shadows } from "@/constants/theme";
 import { getRedirectUri, signInWithOAuth, syncOnboardingToAccount } from "@/lib/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Linking,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Linking,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+
+// ─── Scaling system ────────────────────────────────────────────────────────────
+// Design baseline: iPhone 14 Pro Max (430pt).
+// Every value scales linearly so the layout is pixel-identical at any width.
+const { width: SCREEN_W } = Dimensions.get("window");
+const BASE_W = 430;
+const SCALE = Math.min(SCREEN_W / BASE_W, 1);
+const s = (v: number) => Math.round(v * SCALE);
+const f = (v: number) => Math.round(v * SCALE);
 
 export default function CreateAccountScreen() {
   const router = useRouter();
@@ -94,7 +104,7 @@ export default function CreateAccountScreen() {
 
         {error ? (
           <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle" size={20} color={Colors.error} />
+            <Ionicons name="alert-circle" size={s(20)} color={Colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -111,8 +121,10 @@ export default function CreateAccountScreen() {
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
                 <>
-                  <Ionicons name="logo-apple" size={24} color="#FFF" />
-                  <Text style={[styles.providerBtnText, styles.appleBtnText]}>Sign in with Apple</Text>
+                  <Ionicons name="logo-apple" size={s(24)} color="#FFF" />
+                  <Text style={[styles.providerBtnText, styles.appleBtnText]}>
+                    Sign in with Apple
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
@@ -127,8 +139,10 @@ export default function CreateAccountScreen() {
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
                 <>
-                  <Ionicons name="logo-google" size={24} color="#374151" />
-                  <Text style={[styles.providerBtnText, styles.googleBtnText]}>Sign in with Google</Text>
+                  <Ionicons name="logo-google" size={s(24)} color="#374151" />
+                  <Text style={[styles.providerBtnText, styles.googleBtnText]}>
+                    Sign in with Google
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
@@ -143,6 +157,9 @@ export default function CreateAccountScreen() {
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────────────────────────
+// Every value uses s() or f() so it scales proportionally with screen width.
+// No breakpoints, no conditional styles — identical visual at every size.
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -150,8 +167,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.massive,
+    paddingHorizontal: s(24),
+    paddingTop: s(48),
     alignItems: "center",
     justifyContent: "space-between",
   },
@@ -161,7 +178,7 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     alignItems: "center",
-    marginBottom: Spacing.sm,
+    marginBottom: s(8),
   },
   logoSection: {
     flex: 1,
@@ -170,57 +187,58 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   logo: {
-    width: 180,
-    height: 180,
+    width: s(180),
+    height: s(180),
   },
   titleLine: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 32,
+    fontSize: f(32),
     color: Colors.text,
     textAlign: "center",
   },
   subtitle: {
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: f(16),
     color: Colors.textSecondary,
     textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: Spacing.lg,
+    lineHeight: f(24),
+    paddingHorizontal: s(16),
   },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FEE2E2",
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingVertical: s(12),
+    paddingHorizontal: s(16),
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.xl,
-    gap: Spacing.sm,
+    marginBottom: s(20),
+    gap: s(8),
     alignSelf: "stretch",
   },
   errorText: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: f(14),
     color: Colors.error,
     flex: 1,
   },
   bottomSection: {
     width: "100%",
     alignItems: "center",
+    marginTop: "auto",
   },
   buttons: {
     width: "100%",
-    gap: Spacing.lg,
-    marginBottom: Spacing.xxxl,
+    gap: s(16),
+    marginBottom: s(32),
   },
   providerBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xxl,
+    paddingVertical: s(18),
+    paddingHorizontal: s(24),
     borderRadius: BorderRadius.lg,
-    gap: Spacing.md,
+    gap: s(12),
     ...Shadows.md,
   },
   appleBtn: {
@@ -233,7 +251,7 @@ const styles = StyleSheet.create({
   },
   providerBtnText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 17,
+    fontSize: f(17),
   },
   appleBtnText: {
     color: "#FFF",
@@ -243,9 +261,10 @@ const styles = StyleSheet.create({
   },
   footer: {
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: f(12),
     color: Colors.textMuted,
     textAlign: "center",
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: s(20),
+    marginBottom: s(16),
   },
 });

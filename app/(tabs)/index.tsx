@@ -1,3 +1,4 @@
+import { RecentScansSkeleton, ShimmerCircle } from "@/components/SkeletonCard";
 import { SmoothFade } from "@/components/SmoothUpdate";
 import {
     BorderRadius,
@@ -7,7 +8,10 @@ import {
     Spacing
 } from "@/constants/theme";
 import { getScoreProfile } from "@/lib/gut-score";
+import { useAuthUserQuery } from "@/lib/hooks/use-auth-user-query";
 import { useGutScore } from "@/lib/hooks/use-gut-score-query";
+import { useRecentScans } from "@/lib/hooks/use-recent-scans-query";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { useScansForDay } from "@/lib/hooks/use-scans-for-day-query";
 import { useUserStats } from "@/lib/hooks/use-user-stats-query";
 import { useWeekData } from "@/lib/hooks/use-week-data-query";
@@ -18,7 +22,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
     Image,
     RefreshControl,
@@ -28,15 +32,7 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
-import Animated, {
-    Easing,
-    useAnimatedProps,
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withRepeat,
-    withTiming,
-} from "react-native-reanimated";
+import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming, } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Circle, Defs, RadialGradient, Rect, Stop, Svg } from "react-native-svg";
 
@@ -45,8 +41,8 @@ const HOME_BG = "#FAF8F3";
 const STREAK_ORANGE = "#EA580C";
 const CARD_BG = "#FFFFFF";
 const CARD_BORDER = "rgba(0,0,0,0.06)";
-const SECTION_PADDING_H = 24;
-const DAY_GRID_GAP = 8;
+const SECTION_PADDING_H = rs(24);
+const DAY_GRID_GAP = rs(8);
 
 /** Weekly calendar — single accent (primary green) for tracked days */
 const WEEK_CALENDAR_PRIMARY = "#2D6A4F";
@@ -65,48 +61,12 @@ function getTimeGreeting(): string {
   return "Good evening";
 }
 
-/** Get first name and avatar URL from Supabase user (Google/Apple OAuth or email). */
-function useUserProfile(): { firstName: string; avatarUrl: string | null } {
-  const [firstName, setFirstName] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user || cancelled) return;
-        const full = (user.user_metadata?.full_name ?? user.user_metadata?.name ?? "").trim();
-        if (full) {
-          setFirstName(full.split(/\s+/)[0] ?? "");
-        } else if (user.email) {
-          setFirstName(user.email.split("@")[0] ?? "");
-        }
-        const url =
-          user.user_metadata?.avatar_url ??
-          user.user_metadata?.picture ??
-          null;
-        setAvatarUrl(url);
-      } catch (error) {
-        if (__DEV__) {
-          console.warn("Unable to load user profile from auth:", error);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return { firstName, avatarUrl };
-}
-
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /** Section 2: Hero gut score ring — 90×90, stroke 8, R ~41 */
-const HERO_RING_SIZE = 90;
-const HERO_RING_STROKE = 8;
+const HERO_RING_SIZE = rs(90);
+const HERO_RING_STROKE = rs(8);
 const HERO_RING_R = (HERO_RING_SIZE - HERO_RING_STROKE) / 2;
 const HERO_RING_CIRCUMFERENCE = 2 * Math.PI * HERO_RING_R;
 
@@ -232,7 +192,7 @@ function GutScoreCardHero({
   profile: ReturnType<typeof getScoreProfile>;
   severityColor: string;
   onScanPress: () => void;
-  cardAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
+  cardAnimatedStyle: any;
 }) {
   const ringColor = getGutRingColor(score);
   return (
@@ -520,17 +480,36 @@ function startOfDay(d: Date): Date {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile: authProfile, user, isLoading: isAuthLoading } = useAuthUserQuery();
   const today = React.useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = React.useState<Date>(() => startOfDay(new Date()));
 
-  const { data: gutScoreData, refetch: refetchGutScore } = useGutScore(selectedDate);
-  const { data: dayScans, refetch: refetchScans } = useScansForDay(selectedDate);
-  const { data: stats, refetch: refetchStats } = useUserStats();
+  const {
+    data: gutScoreData,
+    refetch: refetchGutScore,
+    isLoading: isGutScoreLoading,
+  } = useGutScore(selectedDate);
+  const {
+    data: dayScans,
+    refetch: refetchScans,
+    isLoading: isScansLoading,
+    isFetching: isScansFetching,
+  } = useScansForDay(selectedDate);
+  const {
+    data: recentScans,
+    refetch: refetchRecentScans,
+    isLoading: isRecentScansLoading,
+    isFetching: isRecentScansFetching,
+  } = useRecentScans(5);
+  const { data: stats, refetch: refetchStats, isLoading: isStatsLoading } = useUserStats();
   const { weekData, todayIndex, trackedCount, totalDays, refetch: refetchWeek } = useWeekData();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  const gutScore = gutScoreData?.gutScore || 50;
-  const subScores = gutScoreData?.subScores || { skin: 50, bloating: 50, digestion: 50, energy: 50 };
+  // Prefer the real computed gut score; only fall back to neutral 50 if the
+  // query genuinely has no data yet (first-ever launch with no onboarding data).
+  // This prevents the "always 50" issue when users have scans or onboarding data.
+  const gutScore = typeof gutScoreData?.gutScore === "number" ? gutScoreData.gutScore : 50;
+  const subScores = gutScoreData?.subScores ?? { skin: 50, bloating: 50, digestion: 50, energy: 50 };
   const scoreSource = gutScoreData?.scoreSource || "onboarding";
 
   const isSelectedToday = isSameCalendarDay(selectedDate, today);
@@ -538,10 +517,9 @@ export default function HomeScreen() {
   // Refetch when user returns to Home so score and week data stay in sync
   useFocusEffect(
     React.useCallback(() => {
-      refetchGutScore();
       refetchScans();
-      refetchWeek();
-    }, [refetchGutScore, refetchScans, refetchWeek])
+      refetchRecentScans();
+    }, [refetchRecentScans, refetchScans])
   );
 
   const handleDeleteScan = useCallback(
@@ -558,16 +536,27 @@ export default function HomeScreen() {
       if (!error) {
         refetchGutScore();
         refetchScans();
+        refetchRecentScans();
         refetchWeek();
       }
     },
-    [refetchGutScore, refetchScans, refetchWeek]
+    [refetchGutScore, refetchRecentScans, refetchScans, refetchWeek]
   );
 
   const profile = getScoreProfile(gutScore);
 
-  const { firstName, avatarUrl } = useUserProfile();
-  const isLoading = !gutScoreData || !dayScans || !stats || !weekData;
+  const firstName = authProfile.firstName;
+  const avatarUrl = authProfile.avatarUrl;
+  const isLoading = isGutScoreLoading || isStatsLoading || !weekData;
+  const selectedDayScans = dayScans ?? [];
+  const latestScans = recentScans ?? [];
+  const isUsingLatestScanFallback = selectedDayScans.length === 0 && latestScans.length > 0;
+  const scansToRender = isUsingLatestScanFallback ? latestScans : selectedDayScans;
+  const showRecentScansSkeleton =
+    isScansLoading ||
+    (isScansFetching && selectedDayScans.length === 0) ||
+    (selectedDayScans.length === 0 && latestScans.length === 0 && (isRecentScansLoading || isRecentScansFetching));
+  const hasAuthUser = Boolean(user?.id);
   const streakCount = stats?.currentStreak || 0;
 
   // Clear refresh indicator once data has finished loading after pull-to-refresh
@@ -581,9 +570,10 @@ export default function HomeScreen() {
     setIsRefreshing(true);
     refetchGutScore();
     refetchScans();
-    refetchStats();
+    refetchRecentScans();
     refetchWeek();
-  }, [refetchGutScore, refetchScans, refetchStats, refetchWeek]);
+    refetchStats();
+  }, [refetchGutScore, refetchRecentScans, refetchScans, refetchWeek, refetchStats]);
 
   const sectionOpacity = useSharedValue(0);
   const sectionTranslateY = useSharedValue(24);
@@ -668,7 +658,9 @@ export default function HomeScreen() {
               activeOpacity={0.8}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              {avatarUrl ? (
+              {isAuthLoading && hasAuthUser ? (
+                <ShimmerCircle size={44} />
+              ) : avatarUrl ? (
                 <Image
                   source={{ uri: avatarUrl }}
                   style={styles.profileAvatarImage}
@@ -702,12 +694,19 @@ export default function HomeScreen() {
             <View style={styles.weekCardGrid}>
               {weekData.map((item, index) => {
                 const isTracked = item.status !== "none";
+                const isFutureDate = item.dateObj instanceof Date 
+                  ? startOfDay(item.dateObj).getTime() > today.getTime()
+                  : false;
                 return (
                   <TouchableOpacity
                     key={`${item.date}-${index}`}
-                    style={styles.weekCardColumn}
-                    onPress={() => setSelectedDate(item.dateObj)}
+                    style={[styles.weekCardColumn, isFutureDate && styles.weekCardColumnDisabled]}
+                    onPress={() => {
+                      if (isFutureDate || !(item.dateObj instanceof Date)) return;
+                      setSelectedDate(item.dateObj);
+                    }}
                     activeOpacity={0.8}
+                    disabled={isFutureDate}
                   >
                     <Text
                       style={[
@@ -763,10 +762,14 @@ export default function HomeScreen() {
             {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </Text>
         )}
-        {(scoreSource === "scans_yesterday" || (scoreSource === "onboarding" && dayScans.length > 0)) && !isLoading && (
+        {(scoreSource === "scans_yesterday" || scoreSource === "scans_previous" || scoreSource === "none" || (scoreSource === "onboarding" && selectedDayScans.length > 0)) && !isLoading && (
           <Text style={styles.scoreSourceHint}>
             {scoreSource === "scans_yesterday"
               ? "No meals logged for this day. Showing yesterday's score."
+              : scoreSource === "scans_previous"
+              ? "No meals logged for this day. Showing your latest previous logged-day score."
+              : scoreSource === "none"
+              ? "No scans were recorded for this day yet."
               : "Log meals as eaten to see your gut score for this day."}
           </Text>
         )}
@@ -793,7 +796,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {dayScans.length === 0 ? (
+          {showRecentScansSkeleton ? (
+            <RecentScansSkeleton />
+          ) : scansToRender.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyStateIconWrap}>
                 <Ionicons name="camera" size={48} color={Colors.primary} />
@@ -811,7 +816,10 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={styles.recentScansList}>
-              {dayScans.slice(0, 5).map((scan: any, index: number) => (
+              {isUsingLatestScanFallback ? (
+                <Text style={styles.recentScansFallbackHint}>No scans for this day. Showing your latest scans.</Text>
+              ) : null}
+              {scansToRender.slice(0, 5).map((scan: any, index: number) => (
                 <SmoothFade key={scan.id} visible={true} delay={index * 50}>
                   <RecentScanCard
                     scan={scan}
@@ -839,38 +847,38 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SECTION_PADDING_H,
-    paddingTop: Spacing.xl,
-    paddingBottom: 120,
+    paddingTop: rs(Spacing.xl),
+    paddingBottom: rs(120),
   },
   sectionOverview: {
     paddingHorizontal: 0,
-    marginBottom: 20,
+    marginBottom: rs(20),
   },
   sectionHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20,
+    marginBottom: rs(20),
   },
   sectionHeaderLeft: {
     flex: 1,
   },
   sectionGreeting: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
     marginBottom: 2,
   },
   sectionTitle: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 28,
+    fontSize: rf(28),
     color: "#1a1a1a",
     letterSpacing: -0.5,
   },
   profileAvatarButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: CARD_BORDER,
@@ -880,62 +888,62 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
   },
   profileAvatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
   },
   profileAvatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     backgroundColor: Colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
   profileAvatarInitial: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 18,
+    fontSize: rf(18),
     color: "#FFFFFF",
   },
   weekCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 20,
+    borderRadius: rs(20),
     borderWidth: 1,
     borderColor: WEEK_CARD_BORDER,
-    padding: 20,
-    marginBottom: 12,
+    padding: rs(20),
+    marginBottom: rs(12),
   },
   weekCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: rs(16),
   },
   weekCardHeaderLeft: {
     gap: 2,
   },
   weekCardHeaderTitle: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 15,
+    fontSize: rf(15),
     color: WEEK_DARK_TEXT,
   },
   weekCardHeaderSubtitle: {
     fontFamily: Fonts.subtitle,
-    fontSize: 12,
+    fontSize: rf(12),
     color: WEEK_MUTED_TEXT,
   },
   weekCardStreakBadge: {
     backgroundColor: `${WEEK_CALENDAR_PRIMARY}14`,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: rs(10),
+    paddingHorizontal: rs(14),
+    paddingVertical: rs(12),
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: rs(6),
   },
   weekCardStreakText: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: WEEK_CALENDAR_PRIMARY,
   },
   streakIcon: {
@@ -943,18 +951,21 @@ const styles = StyleSheet.create({
   },
   weekCardGrid: {
     flexDirection: "row",
-    gap: 6,
+    gap: rs(6),
   },
   weekCardColumn: {
     flex: 1,
     alignItems: "center",
     minWidth: 0,
   },
+  weekCardColumnDisabled: {
+    opacity: 0.45,
+  },
   weekCardDayLabel: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 11,
+    fontSize: rf(11),
     color: WEEK_MUTED_TEXT,
-    marginBottom: 6,
+    marginBottom: rs(6),
   },
   weekCardDayLabelToday: {
     color: WEEK_CALENDAR_PRIMARY,
@@ -962,14 +973,14 @@ const styles = StyleSheet.create({
   weekCardDateSquare: {
     width: "100%",
     aspectRatio: 1,
-    minHeight: 40,
-    borderRadius: 10,
+    minHeight: rs(40),
+    borderRadius: rs(10),
     alignItems: "center",
     justifyContent: "center",
   },
   weekCardDateNum: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: WEEK_DARK_TEXT,
   },
   weekCardDateNumMuted: {
@@ -977,9 +988,9 @@ const styles = StyleSheet.create({
   },
   gutScoreHeroCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 24,
+    borderRadius: rs(24),
     padding: SECTION_PADDING_H,
-    marginBottom: 20,
+    marginBottom: rs(20),
     borderWidth: 1,
     borderColor: CARD_BORDER,
     overflow: "hidden",
@@ -987,7 +998,7 @@ const styles = StyleSheet.create({
     ...Shadows.md,
   },
   gutScoreHeroCardLoading: {
-    minHeight: 160,
+    minHeight: rs(160),
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1023,12 +1034,12 @@ const styles = StyleSheet.create({
   },
   heroRingScore: {
     fontFamily: Fonts.scoreNumber,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: rf(28),
+    lineHeight: rf(34),
   },
   heroRingMax: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textMuted,
     marginTop: -2,
   },
@@ -1038,34 +1049,34 @@ const styles = StyleSheet.create({
   },
   gutScoreBadge: {
     alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: rs(12),
+    paddingVertical: rs(4),
+    borderRadius: rs(12),
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: rs(10),
   },
   gutScoreBadgeText: {
     fontFamily: Fonts.badge,
-    fontSize: 10,
+    fontSize: rf(10),
     letterSpacing: 0.5,
   },
   gutScoreDescription: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "rgba(0,0,0,0.6)",
-    lineHeight: 24,
+    lineHeight: rf(24),
     marginBottom: 0,
   },
   ctaButtonWrap: {
-    marginTop: 20,
-    borderRadius: 16,
+    marginTop: rs(20),
+    borderRadius: rs(16),
     overflow: "hidden",
     ...Shadows.md,
   },
   ctaButtonGradient: {
-    paddingVertical: 16,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: 16,
+    paddingVertical: rs(16),
+    paddingHorizontal: rs(Spacing.lg),
+    borderRadius: rs(16),
     overflow: "hidden",
     position: "relative",
   },
@@ -1073,14 +1084,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: rs(8),
   },
   ctaButtonEmoji: {
-    fontSize: 18,
+    fontSize: rf(18),
   },
   ctaButtonLabel: {
     fontFamily: Fonts.button,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#FFFFFF",
   },
   ctaShimmer: {
@@ -1093,22 +1104,22 @@ const styles = StyleSheet.create({
   },
   gutScoreDateHint: {
     fontFamily: Fonts.subtitle,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+    marginBottom: rs(Spacing.sm),
     marginTop: -8,
   },
   scoreSourceHint: {
     fontFamily: Fonts.subtitle,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
+    marginBottom: rs(Spacing.lg),
   },
   insightsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 24,
+    gap: rs(12),
+    marginBottom: rs(24),
   },
   insightCard: {
     flexBasis: "48%",
@@ -1116,48 +1127,48 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     backgroundColor: CARD_BG,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: rs(16),
+    paddingHorizontal: rs(16),
+    paddingVertical: rs(12),
     borderWidth: 1,
     borderColor: CARD_BORDER,
     ...Shadows.sm,
   },
   insightIcon: {
-    marginBottom: 8,
+    marginBottom: rs(8),
   },
   insightLabel: {
     fontFamily: Fonts.statsGridLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: "rgba(0,0,0,0.6)",
-    marginBottom: 4,
+    marginBottom: rs(4),
   },
   insightScoreRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 6,
+    gap: rs(6),
   },
   insightScoreNum: {
     fontFamily: Fonts.scoreNumber,
-    fontSize: 20,
+    fontSize: rf(20),
     color: "#1A1A1A",
   },
   insightChange: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 11,
+    fontSize: rf(11),
   },
   recentScansSection: {
-    marginBottom: 24,
+    marginBottom: rs(24),
   },
   recentScansHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: rs(16),
   },
   recentScansTitle: {
     fontFamily: Fonts.sectionHeader,
-    fontSize: 18,
+    fontSize: rf(18),
     color: "#1A1A1A",
   },
   seeAllButton: {
@@ -1166,50 +1177,56 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: IMPACT_POSITIVE,
   },
   recentScansList: {
-    gap: 12,
+    gap: rs(12),
+  },
+  recentScansFallbackHint: {
+    fontFamily: Fonts.subtitle,
+    fontSize: rf(12),
+    color: Colors.textSecondary,
+    marginBottom: 2,
   },
   recentScanCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: rs(16),
+    padding: rs(16),
     borderWidth: 1,
     borderColor: CARD_BORDER,
     ...Shadows.sm,
   },
   recentScanImage: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.sm,
+    width: rs(36),
+    height: rs(36),
+    borderRadius: rs(BorderRadius.sm),
     backgroundColor: Colors.borderLight,
   },
   recentScanImagePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.sm,
+    width: rs(36),
+    height: rs(36),
+    borderRadius: rs(BorderRadius.sm),
     backgroundColor: Colors.borderLight,
     justifyContent: "center",
     alignItems: "center",
   },
   recentScanContent: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: rs(14),
     minWidth: 0,
   },
   recentScanFoodName: {
     fontFamily: Fonts.productName,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#1A1A1A",
-    marginBottom: 4,
+    marginBottom: rs(4),
   },
   recentScanTime: {
     fontFamily: Fonts.timestamp,
-    fontSize: 12,
+    fontSize: rf(12),
     color: "rgba(0,0,0,0.5)",
   },
   recentScanMeta: {
@@ -1217,22 +1234,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   recentScanScoreBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 32,
+    paddingHorizontal: rs(8),
+    paddingVertical: rs(4),
+    borderRadius: rs(12),
+    minWidth: rs(32),
     alignItems: "center",
     justifyContent: "center",
   },
   recentScanScoreText: {
     fontFamily: Fonts.scoreNumber,
-    fontSize: 14,
+    fontSize: rf(14),
     fontWeight: "600",
   },
   recentScanImpact: {
     fontFamily: Fonts.scoreNumber,
-    fontSize: 18,
-    marginLeft: 8,
+    fontSize: rf(18),
+    marginLeft: rs(8),
   },
   loadingContainer: {
     padding: Spacing.xxl,
@@ -1241,9 +1258,9 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: "center",
-    padding: Spacing.xxl,
+    padding: rs(Spacing.xxl),
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: rs(16),
     borderWidth: 1,
     borderColor: CARD_BORDER,
   },
@@ -1252,58 +1269,58 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 18,
+    fontSize: rf(18),
     color: Colors.text,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+    marginTop: rs(Spacing.md),
+    marginBottom: rs(Spacing.xs),
   },
   emptyStateSubtext: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
     textAlign: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: rs(Spacing.lg),
   },
   emptyStateButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
+    paddingHorizontal: rs(Spacing.xl),
+    paddingVertical: rs(Spacing.md),
+    borderRadius: rs(BorderRadius.md),
     ...Shadows.sm,
   },
   emptyStateButtonText: {
     fontFamily: Fonts.button,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#FFFFFF",
   },
   quickStatCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
+    borderRadius: rs(BorderRadius.md),
+    padding: rs(Spacing.md),
     borderWidth: 1,
     borderColor: Colors.border,
     ...Shadows.sm,
   },
   quickStatIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: rs(32),
+    height: rs(32),
+    borderRadius: rs(16),
     backgroundColor: Colors.background,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: Spacing.md,
+    marginRight: rs(Spacing.md),
   },
   quickStatValue: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 18,
+    fontSize: rf(18),
     color: Colors.text,
-    marginRight: Spacing.sm,
+    marginRight: rs(Spacing.sm),
   },
   quickStatLabel: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
   },
 });

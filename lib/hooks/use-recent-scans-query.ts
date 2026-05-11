@@ -51,12 +51,13 @@ export function useRecentScans(limit: number = 5) {
   return useQuery({
     queryKey: ["recentScans"],
     queryFn: () => fetchRecentScans(limit),
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 15,
     retry: shouldRetryQuery,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
+    refetchOnMount: false,
+    refetchOnReconnect: true,
     initialData: [],
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchInterval: 1000 * 60 * 3,
   });
 }

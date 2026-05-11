@@ -5,6 +5,7 @@ import {
     Shadows,
     Spacing,
 } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
@@ -160,7 +161,7 @@ export default function GutHelperScreen() {
       <StatusBar style="dark" />
       {/* Header — white to top of screen */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <View style={[styles.avatar, { backgroundColor: Colors.primary + "22" }]}>
+        <View style={[styles.headerIcon, { backgroundColor: Colors.primary + "22" }]}>
           <Ionicons name="leaf" size={24} color={Colors.primary} />
         </View>
         <View style={styles.headerText}>
@@ -266,24 +267,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  headerIcon: {
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
   },
   headerText: {},
   headerTitle: {
-    fontSize: 20,
+    fontSize: rf(20),
     fontFamily: Fonts.cardTitle,
     color: Colors.text,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: rs(2),
   },
   chatArea: {
     flex: 1,
@@ -319,9 +320,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   bubbleText: {
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
-    lineHeight: 22,
+    lineHeight: rf(22),
   },
   bubbleTextUser: {
     color: "#FFF",
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
   suggestedLabel: {
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textMuted,
     marginBottom: Spacing.sm,
   },
@@ -343,7 +344,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   suggestedChipText: {
-    fontSize: 14,
+    fontSize: rf(14),
     fontFamily: Fonts.body,
   },
   inputRow: {
@@ -358,23 +359,23 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 48,
-    maxHeight: 100,
+    minHeight: rs(48),
+    maxHeight: rs(100),
     backgroundColor: "#FFFFFF",
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
     borderColor: Colors.border,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.text,
     fontFamily: Fonts.body,
     ...Shadows.sm,
   },
   sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     alignItems: "center",
     justifyContent: "center",
   },

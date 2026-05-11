@@ -16,8 +16,15 @@ export default function Index() {
 
   async function checkAuthAndOnboarding() {
     try {
-      // Check if user is authenticated
-      const { data: { user } } = await supabase.auth.getUser();
+      // Prefer persisted session on startup to avoid false logouts when network/getUser is flaky.
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user ?? null;
+
+      // If no persisted session user exists, try server validation as fallback.
+      if (!user) {
+        const { data } = await supabase.auth.getUser();
+        user = data.user ?? null;
+      }
 
       if (user) {
         // User is authenticated - check if they have completed onboarding
@@ -44,11 +51,11 @@ export default function Index() {
       }
     } catch (error) {
       if (isNetworkRequestFailure(error)) {
-        console.warn("Auth check skipped due to network issue; continuing with onboarding fallback.");
+        console.warn("Auth check skipped due to network issue; using local onboarding fallback.");
       } else {
         console.error("Error checking auth/onboarding:", error);
       }
-      // Default to onboarding on error
+      // On unexpected startup errors, keep prior onboarding fallback behavior.
       setRedirectTo("/onboarding/welcome");
     } finally {
       setIsLoading(false);

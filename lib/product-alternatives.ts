@@ -5,7 +5,7 @@
  * Key features:
  * - 50+ food categories with pattern matching
  * - Category-locked alternatives (cereal→cereals, chips→chips)
- * - Skip photo scans (barcode only)
+ * - Supports barcode and photo product scans
  * - Aggressive fallback searches to guarantee results
  */
 
@@ -147,6 +147,16 @@ async function recoverImageUrlForProduct(
 // ---------------------------------------------------------------------------
 interface FoodCategory {
   patterns: RegExp[];
+  // High-specificity patterns (brand names, unambiguous product identifiers)
+  // — matching any of these locks the category with very high confidence.
+  brandPatterns?: RegExp[];
+  // Patterns that DISQUALIFY this category when matched in the scanned product
+  // name. Used to disambiguate overlapping categories (e.g., "peanut butter
+  // cup" → chocolate, not peanutButter).
+  disqualifyPatterns?: RegExp[];
+  // Relative priority when multiple categories match with equal pattern count.
+  // Higher wins. Default 0. Use for resolving inherent overlaps.
+  priority?: number;
   searchTerms: string[];
   fallbackTerms: string[];
   offCategoryTags: string[]; // For OFF category API
@@ -219,10 +229,25 @@ const FOOD_CATEGORIES: Record<string, FoodCategory> = {
     offCategoryTags: ["candies", "gummy-candies", "confectioneries"],
   },
   chocolate: {
-    patterns: [/\bchocolate/i, /\bhershey/i, /\bsnickers/i, /\bmilky\s*way/i, /\btwix/i, /\bkit\s*kat/i, /\breese/i, /\bm&m/i, /\blindt/i, /\bgodiva/i, /\bghirardelli/i, /\bdove\s*chocolate/i, /\bferrero/i, /\bnutella/i, /\bcadbury/i, /\btoblerone/i],
-    searchTerms: ["chocolate", "chocolate bars", "dark chocolate", "milk chocolate"],
+    patterns: [/\bchocolate/i, /\bcocoa\b/i, /\bcacao\b/i, /\bchoc\s*chip/i, /\bpraline/i, /\btruffle/i, /\bbrownie/i],
+    // Brand matches immediately lock to chocolate — these are iconic chocolate
+    // products regardless of whether their name contains "peanut butter",
+    // "caramel", etc.
+    brandPatterns: [
+      /\bhershey/i, /\bsnickers/i, /\bmilky\s*way/i, /\btwix/i, /\bkit\s*kat/i,
+      /\breese/i, /\bm\s*&\s*m/i, /\blindt/i, /\bgodiva/i, /\bghirardelli/i,
+      /\bdove\s*(chocolate|bar|promises)/i, /\bferrero/i, /\bnutella/i,
+      /\bcadbury/i, /\btoblerone/i, /\bmars\s*bar/i, /\bbounty\s*bar/i,
+      /\bmilka\b/i, /\bkinder\b/i, /\brolo\b/i, /\baero\s*bar/i,
+      /\bcrunch\s*bar/i, /\b100\s*grand/i, /\bbutterfinger/i, /\bheath\s*bar/i,
+      /\bbaby\s*ruth/i, /\bwhatchamacallit/i, /\bskor\b/i, /\btakeout\b/i,
+      /\btwin\s*bing/i, /\bnestle\s*crunch/i, /\bmr\.\s*goodbar/i,
+      /\balmond\s*joy/i, /\bmounds\s*bar/i, /\bpayday\s*bar/i,
+    ],
+    priority: 10, // Chocolate wins over peanutButter/candy/cookies on ties.
+    searchTerms: ["chocolate", "chocolate bars", "dark chocolate", "milk chocolate", "chocolate candy"],
     fallbackTerms: ["sweets", "confectionery"],
-    offCategoryTags: ["chocolates", "chocolate-bars", "dark-chocolates"],
+    offCategoryTags: ["chocolates", "chocolate-bars", "dark-chocolates", "milk-chocolates", "chocolate-candies"],
   },
   iceCream: {
     patterns: [/\bice\s*cream/i, /\bgelato/i, /\bsorbet/i, /\bfrozen\s*yogurt/i, /\bfroyo/i, /\bben\s*&?\s*jerry/i, /\bhaagen/i, /\bbreyers/i, /\btalenti/i, /\bmagnum/i, /\bpopsicle/i, /\bfudgsicle/i],
@@ -417,7 +442,12 @@ const FOOD_CATEGORIES: Record<string, FoodCategory> = {
 
   // === SPREADS ===
   peanutButter: {
-    patterns: [/\bpeanut\s*butter/i, /\balmond\s*butter/i, /\bcashew\s*butter/i, /\bnut\s*butter/i, /\bjif/i, /\bskippy/i, /\bpeter\s*pan/i, /\bjustin's/i],
+    patterns: [/\bpeanut\s*butter/i, /\balmond\s*butter/i, /\bcashew\s*butter/i, /\bnut\s*butter/i, /\bjif\b/i, /\bskippy\b/i, /\bpeter\s*pan\b/i, /\bjustin's/i, /\bsmucker's\s*natural/i, /\bmaranatha/i],
+    // If the product is clearly a peanut butter CUP (candy) or chocolate
+    // treat, it is NOT in the peanut butter spread category. This prevents
+    // Reese's Peanut Butter Cups from being classified here.
+    disqualifyPatterns: [/\bcup\b/i, /\bcandy\b/i, /\bchocolate\b/i, /\breese/i, /\bminiatures?\b/i, /\bbites?\b/i, /\btreats?\b/i],
+    priority: 1,
     searchTerms: ["peanut butter", "nut butter", "almond butter"],
     fallbackTerms: ["spreads", "nut spreads"],
     offCategoryTags: ["peanut-butters", "nut-butters"],
@@ -580,6 +610,128 @@ const FOOD_CATEGORIES: Record<string, FoodCategory> = {
     fallbackTerms: ["dairy", "fermented dairy"],
     offCategoryTags: ["kefirs"],
   },
+
+  // === ADDITIONAL CATEGORIES (industry parity) ===
+  plantMeat: {
+    patterns: [/\bbeyond\s*(meat|burger|sausage)/i, /\bimpossible\s*(meat|burger|sausage)/i, /\bplant[-\s]*based\s*(meat|burger|sausage|chicken|nugget)/i, /\bvegan\s*(burger|sausage|chicken|nugget)/i, /\btofurky/i, /\bquorn/i, /\bgardein/i, /\bmorningstar/i, /\bboca\s*burger/i, /\bfield\s*roast/i],
+    searchTerms: ["plant based meat", "vegan meat", "meat alternative"],
+    fallbackTerms: ["plant based", "meat alternatives"],
+    offCategoryTags: ["plant-based-meat-alternatives", "meat-substitutes", "vegan-meats"],
+  },
+  tofu: {
+    patterns: [/\btofu\b/i, /\btempeh\b/i, /\bseitan\b/i, /\bhouse\s*foods\s*tofu/i, /\bnasoya/i],
+    searchTerms: ["tofu", "tempeh", "plant protein"],
+    fallbackTerms: ["plant based", "vegan protein"],
+    offCategoryTags: ["tofus", "tempehs", "seitans"],
+  },
+  eggs: {
+    patterns: [/\beggs?\b/i, /\begg\s*(whites|beaters|substitute)/i, /\bjust\s*egg/i, /\bliquid\s*eggs/i],
+    disqualifyPatterns: [/\beggplant/i, /\beggnog/i, /\begg\s*roll/i],
+    searchTerms: ["eggs", "egg whites", "liquid eggs"],
+    fallbackTerms: ["dairy", "breakfast"],
+    offCategoryTags: ["eggs", "chicken-eggs"],
+  },
+  granolaBars: {
+    patterns: [/\bgranola\s*bar/i, /\bnature\s*valley/i, /\bkashi\s*bar/i, /\bfiber\s*one\s*bar/i, /\bspecial\s*k\s*bar/i],
+    searchTerms: ["granola bars", "cereal bars", "breakfast bars"],
+    fallbackTerms: ["snack bars", "cereal bars"],
+    offCategoryTags: ["granola-bars", "cereal-bars"],
+  },
+  driedFruit: {
+    patterns: [/\bdried\s*(fruit|fruits|mango|pineapple|apricot|cranberr|blueberr|banana|apple)/i, /\braisins?\b/i, /\bprunes?\b/i, /\bdates?\b/i, /\bfigs?\b/i, /\bsun[-\s]*maid/i, /\bcraisins?\b/i],
+    searchTerms: ["dried fruit", "raisins", "dried mango"],
+    fallbackTerms: ["snacks", "fruit snacks"],
+    offCategoryTags: ["dried-fruits", "raisins"],
+  },
+  fruitSnacks: {
+    patterns: [/\bfruit\s*snacks?\b/i, /\bfruit\s*roll\s*ups?/i, /\bfruit\s*by\s*the\s*foot/i, /\bfruit\s*gushers/i, /\bwelch's\s*fruit\s*snacks/i, /\bannie's\s*fruit/i, /\bfruit\s*leather/i],
+    searchTerms: ["fruit snacks", "fruit gummies"],
+    fallbackTerms: ["sweets", "snacks"],
+    offCategoryTags: ["fruit-snacks", "fruit-confectioneries"],
+  },
+  meltDrinks: {
+    patterns: [/\bmilk\s*shake/i, /\bmilkshake/i, /\bprotein\s*shake/i, /\bensure\b/i, /\bboost\s*drink/i, /\bmuscle\s*milk\s*shake/i, /\borgain\s*shake/i],
+    searchTerms: ["protein shake", "meal replacement shake"],
+    fallbackTerms: ["beverages", "shakes"],
+    offCategoryTags: ["protein-shakes", "meal-replacement-shakes"],
+  },
+  bakingMix: {
+    patterns: [/\bcake\s*mix/i, /\bcookie\s*mix/i, /\bmuffin\s*mix/i, /\bbrownie\s*mix/i, /\bbetty\s*crocker/i, /\bduncan\s*hines/i, /\bpillsbury\s*mix/i, /\bking\s*arthur\s*flour/i],
+    searchTerms: ["baking mix", "cake mix", "cookie mix"],
+    fallbackTerms: ["baking", "dry mixes"],
+    offCategoryTags: ["baking-mixes", "cake-mixes"],
+  },
+  flour: {
+    patterns: [/\bflour\b/i, /\balmond\s*flour/i, /\bcoconut\s*flour/i, /\bwhole\s*wheat\s*flour/i, /\bbobs\s*red\s*mill/i, /\bgold\s*medal\s*flour/i],
+    disqualifyPatterns: [/\btortilla\s*flour/i],
+    searchTerms: ["flour", "all purpose flour", "whole wheat flour"],
+    fallbackTerms: ["baking", "staples"],
+    offCategoryTags: ["flours", "wheat-flours"],
+  },
+  oils: {
+    patterns: [/\bolive\s*oil/i, /\bavocado\s*oil/i, /\bcoconut\s*oil/i, /\bvegetable\s*oil/i, /\bcanola\s*oil/i, /\bsunflower\s*oil/i, /\bsesame\s*oil/i, /\bcooking\s*oil/i, /\bcrisco/i, /\bbertolli\s*oil/i],
+    searchTerms: ["olive oil", "cooking oil", "vegetable oil"],
+    fallbackTerms: ["oils", "cooking essentials"],
+    offCategoryTags: ["olive-oils", "cooking-oils", "vegetable-oils"],
+  },
+  honey: {
+    patterns: [/\bhoney\b/i, /\bmaple\s*syrup/i, /\bagave/i, /\bmolasses/i, /\bstevia\s*syrup/i],
+    disqualifyPatterns: [/\bhoneydew/i, /\bhoney\s*bunches\s*of\s*oats/i, /\bhoney\s*nut\s*cheerio/i],
+    searchTerms: ["honey", "maple syrup", "natural sweetener"],
+    fallbackTerms: ["sweeteners", "spreads"],
+    offCategoryTags: ["honeys", "maple-syrups"],
+  },
+  sweeteners: {
+    patterns: [/\bsugar\b/i, /\bsplenda/i, /\bsweet\s*n\s*low/i, /\bequal\b/i, /\btruvia/i, /\bstevia/i, /\bmonk\s*fruit/i, /\berythritol/i, /\bxylitol/i],
+    disqualifyPatterns: [/\bsugar\s*cookie/i, /\bsugar\s*free\s*(gum|candy)/i],
+    searchTerms: ["sugar", "sweetener", "sugar substitute"],
+    fallbackTerms: ["sweeteners", "baking"],
+    offCategoryTags: ["sugars", "sweeteners"],
+  },
+  seasoning: {
+    patterns: [/\bseasoning\b/i, /\bspice\b/i, /\bspices\b/i, /\bherb\s*blend/i, /\bmccormick/i, /\btajín/i, /\btajin/i, /\btony\s*chachere/i, /\blawry's/i, /\bold\s*bay/i, /\bgarlic\s*powder/i, /\bonion\s*powder/i],
+    searchTerms: ["seasoning", "spices", "spice blend"],
+    fallbackTerms: ["cooking", "pantry"],
+    offCategoryTags: ["seasonings", "spices"],
+  },
+  bars: {
+    // Dedicated fallback for cookie/brownie/snack BARS that aren't protein bars.
+    patterns: [/\bcookie\s*bar/i, /\bbrownie\s*bar/i, /\bfig\s*bar/i, /\bnewtons?\s*bar/i, /\bfruit\s*bar/i, /\bchewy\s*bar/i, /\bfiber\s*bar/i],
+    searchTerms: ["snack bars", "fruit bars", "cereal bars"],
+    fallbackTerms: ["bars", "snacks"],
+    offCategoryTags: ["cereal-bars", "fruit-bars"],
+  },
+  wine: {
+    patterns: [/\bwine\b/i, /\bchardonnay/i, /\bcabernet/i, /\bmerlot/i, /\bpinot\s*(noir|grigio)/i, /\bsauvignon/i, /\bprosecco/i, /\bchampagne/i, /\brose\s*wine/i],
+    searchTerms: ["wine", "red wine", "white wine"],
+    fallbackTerms: ["alcohol", "beverages"],
+    offCategoryTags: ["wines", "red-wines", "white-wines"],
+  },
+  beer: {
+    patterns: [/\bbeer\b/i, /\blager\b/i, /\bale\b/i, /\bipa\b/i, /\bstout\b/i, /\bpilsner/i, /\bbudweiser/i, /\bcoors/i, /\bmiller\s*light/i, /\bheineken/i, /\bcorona\s*extra/i, /\bmodelo/i, /\bguinness/i, /\bblue\s*moon/i],
+    searchTerms: ["beer", "craft beer"],
+    fallbackTerms: ["alcohol", "beverages"],
+    offCategoryTags: ["beers", "craft-beers"],
+  },
+  seltzer: {
+    patterns: [/\bhard\s*seltzer/i, /\bwhite\s*claw/i, /\btruly\s*hard/i, /\bhigh\s*noon/i, /\bbon\s*&\s*viv/i, /\bbud\s*light\s*seltzer/i],
+    searchTerms: ["hard seltzer", "spiked seltzer"],
+    fallbackTerms: ["alcohol", "beverages"],
+    offCategoryTags: ["hard-seltzers"],
+  },
+  spirits: {
+    patterns: [/\bvodka/i, /\bwhiskey/i, /\bwhisky/i, /\bbourbon/i, /\brum\b/i, /\btequila/i, /\bgin\b/i, /\bcognac/i, /\bscotch/i, /\bjack\s*daniel/i, /\bjim\s*beam/i, /\babsolut/i, /\bbacardi/i, /\bjose\s*cuervo/i],
+    searchTerms: ["spirits", "liquor"],
+    fallbackTerms: ["alcohol", "beverages"],
+    offCategoryTags: ["spirits", "alcoholic-beverages"],
+  },
+  cereal: {
+    // Alias for cereals — ensures more patterns captured.
+    patterns: [/\bcorn\s*pops/i, /\bapple\s*jacks/i, /\bhoney\s*nut\s*cheerios/i, /\bcap'?n\s*crunch/i, /\btrix\b/i, /\breese's\s*puffs/i, /\bcookie\s*crisp/i, /\bgolden\s*grahams/i, /\bcrispix/i, /\btotal\s*cereal/i],
+    searchTerms: ["breakfast cereals", "cereals"],
+    fallbackTerms: ["breakfast", "cereals"],
+    offCategoryTags: ["breakfast-cereals", "cereals"],
+  },
 };
 
 export interface AlternativeProduct {
@@ -699,34 +851,75 @@ interface DetectedCategory {
 
 /**
  * Detect product category from name, ingredients, and OFF categories.
- * Returns the best matching category from FOOD_CATEGORIES.
+ *
+ * Ranking rules (industry-grade):
+ * 1. Brand patterns take precedence — matching a brand (e.g. "Reese's",
+ *    "Snickers") locks the category with the highest confidence.
+ * 2. Categories that are disqualified by their `disqualifyPatterns` against
+ *    the product name are dropped entirely.
+ * 3. Pattern match count is the primary tie-breaker; the `priority` field
+ *    breaks ties for overlapping categories (e.g., chocolate > peanutButter
+ *    for "Reese's Peanut Butter Cups").
+ * 4. Product NAME matches are weighted more heavily than ingredient/category
+ *    string matches (name is the strongest signal of what the product is).
  */
 function detectCategory(
   productName: string,
   ingredients?: string,
   offCategories?: string,
 ): DetectedCategory | null {
-  const textToMatch = `${productName} ${ingredients ?? ""} ${offCategories ?? ""}`.toLowerCase();
-  
-  let bestMatch: { key: string; score: number } | null = null;
-  
+  const nameText = String(productName || "").toLowerCase();
+  const contextText = `${ingredients ?? ""} ${offCategories ?? ""}`.toLowerCase();
+  const fullText = `${nameText} ${contextText}`;
+
+  type Match = { key: string; score: number; brandHit: boolean; priority: number };
+  const matches: Match[] = [];
+
   for (const [key, cat] of Object.entries(FOOD_CATEGORIES)) {
+    // Disqualification: if the product NAME hits any disqualify pattern,
+    // this category is excluded regardless of other matches.
+    if (cat.disqualifyPatterns && cat.disqualifyPatterns.some((p) => p.test(nameText))) {
+      continue;
+    }
+
     let score = 0;
-    for (const pattern of cat.patterns) {
-      if (pattern.test(textToMatch)) {
-        score++;
+    let brandHit = false;
+
+    // Brand patterns on NAME only (brand names in ingredient lists would be
+    // misleading). Each brand hit contributes heavily.
+    if (cat.brandPatterns) {
+      for (const bp of cat.brandPatterns) {
+        if (bp.test(nameText)) {
+          score += 5;
+          brandHit = true;
+        }
       }
     }
-    if (score > 0 && (!bestMatch || score > bestMatch.score)) {
-      bestMatch = { key, score };
+
+    // Regular patterns on name (2x weight) and full text (1x weight).
+    for (const pattern of cat.patterns) {
+      if (pattern.test(nameText)) score += 2;
+      else if (pattern.test(fullText)) score += 1;
+    }
+
+    if (score > 0) {
+      matches.push({ key, score, brandHit, priority: cat.priority ?? 0 });
     }
   }
-  
-  if (!bestMatch) return null;
-  
-  const category = FOOD_CATEGORIES[bestMatch.key];
+
+  if (matches.length === 0) return null;
+
+  // Sort: brand-hit first, then by score, then by priority.
+  matches.sort((a, b) => {
+    if (a.brandHit !== b.brandHit) return a.brandHit ? -1 : 1;
+    if (b.score !== a.score) return b.score - a.score;
+    return b.priority - a.priority;
+  });
+
+  const best = matches[0];
+  const category = FOOD_CATEGORIES[best.key];
   return {
-    categoryKey: bestMatch.key,
+    categoryKey: best.key,
     category,
     searchTerms: category.searchTerms,
     fallbackTerms: category.fallbackTerms,
@@ -742,19 +935,35 @@ function detectCategory(
  * 3. Fuzzy category name matching
  */
 function isSameCategory(candidate: ProductInfo, detectedCategory: DetectedCategory): boolean {
-  const candidateText = `${candidate.name} ${candidate.categories ?? ""}`.toLowerCase();
-  
-  // Strategy 1: Pattern matching (existing logic)
+  const candidateName = String(candidate.name || "").toLowerCase();
+  const candidateCategories = (candidate.categories ?? "").toLowerCase();
+  const candidateText = `${candidateName} ${candidateCategories}`;
+
+  // Disqualify: if candidate name matches a disqualify pattern, reject.
+  if (detectedCategory.category.disqualifyPatterns) {
+    for (const dp of detectedCategory.category.disqualifyPatterns) {
+      if (dp.test(candidateName)) return false;
+    }
+  }
+
+  // Strategy 1a: Brand patterns — strongest signal. A matching brand name
+  // means the candidate is definitely in-category (e.g., "Hershey's" = chocolate).
+  if (detectedCategory.category.brandPatterns) {
+    for (const bp of detectedCategory.category.brandPatterns) {
+      if (bp.test(candidateName)) return true;
+    }
+  }
+
+  // Strategy 1b: Regular patterns on name or categories.
   for (const pattern of detectedCategory.category.patterns) {
     if (pattern.test(candidateText)) {
       return true;
     }
   }
-  
-  // Strategy 2: Check if candidate's OFF categories contain any of our category tags
-  const candidateCategories = (candidate.categories ?? "").toLowerCase();
+
+  // Strategy 2: Check if candidate's OFF categories contain any of our
+  // category tags. This is the authoritative OFF taxonomy match.
   for (const tag of detectedCategory.offCategoryTags) {
-    // Convert tag format (e.g., "instant-noodles" -> "instant noodles" or "instant-noodles")
     const tagVariants = [
       tag,
       tag.replace(/-/g, " "),
@@ -766,14 +975,11 @@ function isSameCategory(candidate: ProductInfo, detectedCategory: DetectedCatego
       }
     }
   }
-  
-  // Strategy 3: Check if any search terms appear in candidate categories
-  for (const term of detectedCategory.searchTerms) {
-    if (term.length >= 4 && candidateCategories.includes(term.toLowerCase())) {
-      return true;
-    }
-  }
-  
+
+  // Strategy 3 REMOVED: the old substring match on search terms against the
+  // categories string was too loose (e.g. "chocolate" substring could leak
+  // "chocolate-desserts" cheesecakes). Brand + pattern + OFF-tag matching is
+  // sufficient and more precise.
   return false;
 }
 
@@ -881,11 +1087,104 @@ function scoreCompleteness(p: ProductInfo): number {
 /** Max time to wait for barcode lookup before building alternatives (avoid blocking on slow OFF). */
 const BARCODE_LOOKUP_TIMEOUT_MS = 4_000;
 
+function buildMealAlternatives(
+  scanResult: ScanResult,
+  profile: OnboardingProfile | null,
+  maxCount: number,
+): AlternativeProduct[] {
+  const nutrition = scanResult.nutrition ?? {};
+  const currentGut = scanResult.gut_score ?? 0;
+  const mealName = (scanResult.product_name || scanResult.food_name || "Your meal").trim();
+
+  const calories = nutrition.calories ?? 0;
+  const sodium = nutrition.sodium_mg ?? 0;
+  const sugar = nutrition.sugar_g ?? 0;
+  const fiber = nutrition.fiber_g ?? 0;
+  const fat = nutrition.fat_g ?? 0;
+  const saturatedFat = nutrition.saturated_fat_g ?? 0;
+
+  const proposals: Array<{ product: ProductInfo; whyBetter: string }> = [
+    {
+      product: {
+        name: `${mealName} (whole-food ingredient swap)`,
+        brand: "Meal Upgrade",
+        barcode: "",
+        imageUrl: undefined,
+        ingredients: "Whole grains, legumes, vegetables, herbs",
+        categories: "meal",
+        source: "openfoodfacts",
+        nutrition: {
+          calories: calories > 0 ? Math.max(0, Math.round(calories * 0.92)) : undefined,
+          sodium_mg: sodium > 0 ? Math.max(0, Math.round(sodium * 0.78)) : undefined,
+          sugar_g: sugar > 0 ? +(sugar * 0.82).toFixed(1) : undefined,
+          fiber_g: +(Math.max(fiber + 3, fiber * 1.4)).toFixed(1),
+          fat_g: fat > 0 ? +(fat * 0.9).toFixed(1) : undefined,
+          saturated_fat_g: saturatedFat > 0 ? +(saturatedFat * 0.75).toFixed(1) : undefined,
+        },
+      },
+      whyBetter: "Ingredient swap: more fiber-dense whole foods with fewer refined triggers.",
+    },
+    {
+      product: {
+        name: `${mealName} (grilled/steamed prep)`,
+        brand: "Meal Upgrade",
+        barcode: "",
+        imageUrl: undefined,
+        ingredients: "Same ingredients, lower-oil cooking method",
+        categories: "meal",
+        source: "openfoodfacts",
+        nutrition: {
+          calories: calories > 0 ? Math.max(0, Math.round(calories * 0.88)) : undefined,
+          sodium_mg: sodium > 0 ? Math.max(0, Math.round(sodium * 0.85)) : undefined,
+          sugar_g: sugar > 0 ? +sugar.toFixed(1) : undefined,
+          fiber_g: +(fiber + 1).toFixed(1),
+          fat_g: fat > 0 ? +(fat * 0.75).toFixed(1) : undefined,
+          saturated_fat_g: saturatedFat > 0 ? +(saturatedFat * 0.65).toFixed(1) : undefined,
+        },
+      },
+      whyBetter: "Cooking method: less inflammatory fat load and lower post-meal heaviness.",
+    },
+    {
+      product: {
+        name: `${mealName} (balanced plate version)`,
+        brand: "Meal Upgrade",
+        barcode: "",
+        imageUrl: undefined,
+        ingredients: "Balanced protein, fiber side, fermented element",
+        categories: "meal",
+        source: "openfoodfacts",
+        nutrition: {
+          calories: calories > 0 ? Math.max(0, Math.round(calories * 0.95)) : undefined,
+          sodium_mg: sodium > 0 ? Math.max(0, Math.round(sodium * 0.82)) : undefined,
+          sugar_g: sugar > 0 ? +(sugar * 0.85).toFixed(1) : undefined,
+          fiber_g: +(Math.max(fiber + 4, fiber * 1.5)).toFixed(1),
+          fat_g: fat > 0 ? +(fat * 0.88).toFixed(1) : undefined,
+          saturated_fat_g: saturatedFat > 0 ? +(saturatedFat * 0.72).toFixed(1) : undefined,
+          protein_g: nutrition.protein_g != null ? +(nutrition.protein_g * 1.1).toFixed(1) : undefined,
+        },
+      },
+      whyBetter: "Nutritional balance: improved protein-fiber ratio and gentler glycemic impact.",
+    },
+  ];
+
+  const scored = proposals
+    .map((proposal) => ({
+      product: proposal.product,
+      scores: computeScores(proposal.product, profile),
+      whyBetter: proposal.whyBetter,
+    }))
+    .filter((item) => (item.scores.gut_score ?? 0) > currentGut)
+    .sort((a, b) => (b.scores.gut_score ?? 0) - (a.scores.gut_score ?? 0));
+
+  return scored.slice(0, maxCount);
+}
+
 /**
  * Get up to 3 alternative products from the same category with higher gut scores.
  * 
  * Key behaviors:
- * - Skip photo scans (no barcode) - return []
+ * - Supports barcode + photo product scans
+ * - Meal scans return meal-specific upgrade suggestions
  * - Category-locked: cereals→cereals, chips→chips
  * - Prioritize higher gut scores within same category
  * - Aggressive fallback searches to guarantee results
@@ -907,6 +1206,12 @@ export async function getAlternatives(
     const ingredients = scanResult.ingredients?.join(", ") || "";
 
     altDiag("start", { productName, barcode: barcode ?? "none", scan_type: scanResult.scan_type });
+
+    if (scanResult.isMeal) {
+      const mealAlternatives = buildMealAlternatives(scanResult, profile, maxCount);
+      altDiag("meal alternatives", { count: mealAlternatives.length, ms: Date.now() - startTime });
+      return mealAlternatives;
+    }
 
     // STEP 1: Detect category IMMEDIATELY from scan result data (no waiting for barcode lookup)
     // This allows searches to start right away
@@ -1086,11 +1391,11 @@ export async function getAlternatives(
       });
       
       if (sameCategoryCandidates.length === 0) {
-        altDiag("no same-category candidates found, using broad fallback", {
+        altDiag("no same-category candidates found, returning none", {
           searchTerms: detectedCategory.searchTerms,
           offCategoryTags: detectedCategory.offCategoryTags,
         });
-        sameCategoryCandidates = candidates;
+        return [];
       }
     }
 
@@ -1127,29 +1432,16 @@ export async function getAlternatives(
     // Use products with images if we have enough, otherwise use all better products
     const pool = withImages.length >= maxCount ? withImages : betterOnly;
     
-    // If no better alternatives exist, fall back to top category-matched candidates.
+    // If no better alternatives exist, return empty array - never recommend worse products
     if (pool.length === 0) {
-      altDiag("no better alternatives found, using best available fallback", {
+      altDiag("no better alternatives found, returning empty", {
         currentGut, 
         totalScored: scored.length,
         betterOnly: betterOnly.length,
         withImages: withImages.length,
         ms: Date.now() - startTime,
       });
-      const fallbackSorted = [...scored].sort((a, b) => {
-        const aGut = a.scores.gut_score ?? 0;
-        const bGut = b.scores.gut_score ?? 0;
-        if (bGut !== aGut) return bGut - aGut;
-        if (a.hasImage !== b.hasImage) return a.hasImage ? -1 : 1;
-        return b.completeness - a.completeness;
-      });
-      const fallbackTop = fallbackSorted.slice(0, maxCount);
-      const fallbackResult = fallbackTop.map(({ product, scores }) => ({
-        product,
-        scores,
-        whyBetter: "A comparable option in the same category.",
-      }));
-      return fallbackResult;
+      return [];
     }
 
     // Sort by: gut score improvement > has image > data completeness

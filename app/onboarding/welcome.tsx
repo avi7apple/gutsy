@@ -1,6 +1,7 @@
 import OnboardingButton from "@/components/onboarding/OnboardingButton";
 import { BorderRadius, Colors, Fonts, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
 import { signInWithOAuth, syncOnboardingToAccount } from "@/lib/auth";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
@@ -28,10 +29,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const SHEET_HEIGHT = 220;
+const SHEET_HEIGHT = rs(220);
 
-const MIN_IMAGE_WIDTH = 280;
-const MIN_IMAGE_HEIGHT = 200;
+const MIN_IMAGE_WIDTH = rs(280);
+const MIN_IMAGE_HEIGHT = rs(200);
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -352,15 +353,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: Spacing.xxl,
-    paddingBottom: Spacing.xxxl,
+    paddingTop: rs(Spacing.xxl),
+    paddingBottom: rs(Spacing.xxxl),
   },
 
   // Logo (width set inline from useWindowDimensions)
   logoContainer: {
-    height: 44,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xl,
+    height: rs(44),
+    marginTop: rs(Spacing.lg),
+    marginBottom: rs(Spacing.xl),
   },
   logo: {
     width: "100%",
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: Spacing.xl,
+    marginVertical: rs(Spacing.xl),
   },
   welcomeImage: {
     width: "100%",
@@ -381,26 +382,28 @@ const styles = StyleSheet.create({
 
   // Text
   textContainer: {
-    paddingHorizontal: Spacing.xxl,
-    marginBottom: Spacing.xxxl,
+    paddingHorizontal: rs(Spacing.xxl),
+    marginBottom: rs(Spacing.xxxl),
     alignItems: "center",
   },
   mainText: {
-    fontSize: 36,
+    fontSize: rf(36),
     fontWeight: "700",
     color: "#2E2E2E",
     textAlign: "center",
-    lineHeight: 44,
+    lineHeight: rf(44),
     letterSpacing: -0.8,
   },
 
   bottomSection: {
     width: "100%",
-    ...OnboardingButtonBar,
+    paddingTop: rs(OnboardingButtonBar.paddingTop),
+    paddingBottom: rs(OnboardingButtonBar.paddingBottom),
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal),
   },
   ctaSection: {
     width: "100%",
-    marginBottom: Spacing.lg,
+    marginBottom: rs(Spacing.lg),
   },
   getStartedButton: {
     backgroundColor: "#325C3A",
@@ -416,7 +419,7 @@ const styles = StyleSheet.create({
   },
   signInText: {
     color: "#2E2E2E",
-    fontSize: 15,
+    fontSize: rf(15),
     fontWeight: "500",
   },
 
@@ -436,16 +439,16 @@ const styles = StyleSheet.create({
     ...Shadows.lg,
   },
   sheetContent: {
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.md,
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.md),
   },
   sheetHandle: {
-    width: 36,
+    width: rs(36),
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.border,
     alignSelf: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: rs(Spacing.lg),
   },
   sheetError: {
     flexDirection: "row",
@@ -459,22 +462,22 @@ const styles = StyleSheet.create({
   },
   sheetErrorText: {
     fontFamily: Fonts.body,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.error,
     flex: 1,
   },
   sheetButtons: {
-    gap: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    gap: rs(Spacing.lg),
+    paddingBottom: rs(Spacing.lg),
   },
   providerBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xxl,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.md,
+    paddingVertical: rs(Spacing.xl),
+    paddingHorizontal: rs(Spacing.xxl),
+    borderRadius: rs(BorderRadius.lg),
+    gap: rs(Spacing.md),
     ...Shadows.md,
   },
   appleBtn: {
@@ -487,7 +490,7 @@ const styles = StyleSheet.create({
   },
   providerBtnText: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 17,
+    fontSize: rf(17),
   },
   appleBtnText: {
     color: "#FFF",

@@ -102,11 +102,12 @@ export function useUserStats() {
   return useQuery({
     queryKey: ["userStats"],
     queryFn: fetchUserStats,
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 30,
     retry: shouldRetryQuery,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnMount: "always",
+    refetchOnReconnect: true,
     initialData: {
       todayScans: 0,
       currentStreak: 0,
@@ -114,7 +115,6 @@ export function useUserStats() {
       totalScans: 0,
       longestStreak: 0,
     },
-    // Enable background refetching for real-time updates
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchInterval: 1000 * 60,
   });
 }

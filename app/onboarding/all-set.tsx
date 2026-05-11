@@ -1,17 +1,18 @@
+import OnboardingButton from "@/components/onboarding/OnboardingButton";
+import { Fonts, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
+import { getOnboardingProfile, type OnboardingProfile } from "@/lib/onboarding-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import OnboardingButton from "@/components/onboarding/OnboardingButton";
-import { getOnboardingProfile, type OnboardingProfile } from "@/lib/onboarding-storage";
-import { Fonts, Spacing, Shadows, OnboardingButtonBar } from "@/constants/theme";
 
 const PRODUCT_BULLETS = [
   "How it affects YOUR skin",
@@ -24,17 +25,19 @@ function ProfileRow({
   emoji,
   label,
   value,
+  isSmallScreen,
 }: {
   emoji: string;
   label: string;
   value: string | null;
+  isSmallScreen: boolean;
 }) {
   const display = value && value.trim() !== "" ? value : "Not set";
   return (
-    <View style={styles.profileRow}>
+    <View style={[styles.profileRow, isSmallScreen ? styles.profileRowTight : undefined]}>
       <Text style={styles.profileRowEmoji}>{emoji}</Text>
-      <Text style={styles.profileRowLabel}>{label}</Text>
-      <Text style={styles.profileRowValue} numberOfLines={1}>
+      <Text style={[styles.profileRowLabel, isSmallScreen ? styles.profileRowLabelTight : undefined]}>{label}</Text>
+      <Text style={[styles.profileRowValue, isSmallScreen ? styles.profileRowValueTight : undefined]} numberOfLines={1}>
         {display}
       </Text>
     </View>
@@ -44,6 +47,9 @@ function ProfileRow({
 export default function AllSetScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<OnboardingProfile | null>(null);
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
 
   useEffect(() => {
     getOnboardingProfile().then(setProfile);
@@ -59,51 +65,71 @@ export default function AllSetScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isCompactScreen ? styles.scrollContentCompact : undefined,
+            isSmallScreen ? styles.scrollContentTight : undefined,
+          ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.checkSection}>
-            <View style={styles.checkCircle}>
-              <Ionicons name="checkmark" size={48} color="#325C3A" />
+          <View
+            style={[styles.checkSection, isCompactScreen ? styles.checkSectionCompact : undefined, isSmallScreen ? styles.checkSectionTight : undefined]}
+          >
+            <View style={[styles.checkCircle, isSmallScreen ? styles.checkCircleTight : undefined]}>
+              <Ionicons name="checkmark" size={isSmallScreen ? 36 : 48} color="#325C3A" />
             </View>
-            <Text style={styles.title}>You're all set! 🎉</Text>
-            <Text style={styles.subtitle}>Here's your personalized profile:</Text>
+            <Text style={[styles.title, isSmallScreen ? styles.titleTight : undefined]}>You're all set! 🎉</Text>
+            <Text style={[styles.subtitle, isSmallScreen ? styles.subtitleTight : undefined]}>Here's your personalized profile:</Text>
           </View>
 
-          <View style={styles.profileCard}>
-            <ProfileRow emoji="🎯" label="Goal:" value={profile?.goal ?? null} />
+          <View style={[styles.profileCard, isSmallScreen ? styles.profileCardTight : undefined]}>
+            <ProfileRow emoji="🎯" label="Goal:" value={profile?.goal ?? null} isSmallScreen={isSmallScreen} />
             <View style={styles.profileCardDivider} />
             <ProfileRow
               emoji="✨"
               label="Skin type:"
               value={profile?.skinType ?? null}
+              isSmallScreen={isSmallScreen}
             />
             <View style={styles.profileCardDivider} />
             <ProfileRow
               emoji="💧"
               label="Water:"
               value={profile?.water ?? null}
+              isSmallScreen={isSmallScreen}
             />
             <View style={styles.profileCardDivider} />
             <ProfileRow
               emoji="⚠️"
               label="Triggers:"
               value={profile?.trigger ?? null}
+              isSmallScreen={isSmallScreen}
             />
           </View>
 
           <View style={styles.divider} />
 
-          <View style={styles.productSection}>
-            <View style={styles.productSectionInner}>
-              <Text style={styles.sectionTitle}>⭐ For every product, you'll see:</Text>
-              <View style={styles.bulletList}>
+          <View style={[styles.productSection, isSmallScreen ? styles.productSectionTight : undefined]}>
+            <View
+              style={[
+                styles.productSectionInner,
+                isSmallScreen ? styles.productSectionInnerTight : undefined,
+              ]}
+            >
+              <Text style={[styles.sectionTitle, isSmallScreen ? styles.sectionTitleTight : undefined]}>⭐ For every product, you'll see:</Text>
+              <View
+                style={[
+                  styles.bulletList,
+                  isSmallScreen ? styles.bulletListTight : undefined,
+                  isSmallScreen ? styles.bulletListAlignStart : undefined,
+                ]}
+              >
                 {PRODUCT_BULLETS.map((item) => (
                   <View key={item} style={styles.bulletRow}>
-                    <View style={styles.bulletCheckBox}>
-                      <Text style={styles.bulletCheck}>✓</Text>
+                    <View style={[styles.bulletCheckBox, isSmallScreen ? styles.bulletCheckBoxTight : undefined]}>
+                      <Text style={[styles.bulletCheck, isSmallScreen ? styles.bulletCheckTight : undefined]}>✓</Text>
                     </View>
-                    <Text style={styles.bulletText}>{item}</Text>
+                    <Text style={[styles.bulletText, isSmallScreen ? styles.bulletTextTight : undefined]}>{item}</Text>
                   </View>
                 ))}
               </View>
@@ -111,14 +137,17 @@ export default function AllSetScreen() {
           </View>
         </ScrollView>
 
-        <View style={styles.buttonContainer}>
-          <Text style={styles.analyzeText}>
+        <View
+          style={[styles.buttonContainer, isCompactScreen ? styles.buttonContainerCompact : undefined, isSmallScreen ? styles.buttonContainerTight : undefined]}
+        >
+          <Text style={[styles.analyzeText, isSmallScreen ? styles.analyzeTextTight : undefined]}>
             We'll analyze every product based on YOUR body
           </Text>
           <OnboardingButton
             title="Scan my first product →"
             onPress={handleScanProduct}
             style={styles.button}
+            textStyle={isSmallScreen ? styles.buttonLabelTight : undefined}
           />
         </View>
       </SafeAreaView>
@@ -138,45 +167,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.xxxl,
-    paddingBottom: Spacing.xl,
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.xxxl),
+    paddingBottom: rs(Spacing.xl),
+  },
+  scrollContentCompact: {
+    paddingHorizontal: rs(Spacing.xl),
+  },
+  scrollContentTight: {
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.xxxl * 1.4),
+    paddingBottom: rs(Spacing.xl),
   },
   checkSection: {
     alignItems: "center",
-    marginBottom: Spacing.xxl,
+    marginBottom: rs(Spacing.xxl),
+  },
+  checkSectionCompact: {
+    marginBottom: rs(Spacing.xl),
+  },
+  checkSectionTight: {
+    marginBottom: rs(Spacing.lg),
   },
   checkCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: rs(88),
+    height: rs(88),
+    borderRadius: rs(44),
     backgroundColor: "#E6EFE9",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: rs(Spacing.lg),
+  },
+  checkCircleTight: {
+    width: rs(70),
+    height: rs(70),
+    borderRadius: rs(35),
   },
   title: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 26,
+    fontSize: rf(26),
     color: "#2E2E2E",
-    lineHeight: 34,
-    marginBottom: Spacing.sm,
+    lineHeight: rf(34),
+    marginBottom: rs(Spacing.sm),
     textAlign: "center",
+  },
+  titleTight: {
+    fontSize: rf(20),
+    lineHeight: rf(28),
   },
   subtitle: {
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: rf(16),
     color: "#6B7280",
-    lineHeight: 24,
+    lineHeight: rf(24),
     textAlign: "center",
+  },
+  subtitleTight: {
+    fontSize: rf(14),
+    lineHeight: rf(20),
   },
   profileCard: {
     backgroundColor: "#E6F0E2",
-    borderRadius: 16,
+    borderRadius: rs(16),
     borderWidth: 2,
     borderColor: "#325C3A",
-    padding: Spacing.xxl,
-    marginBottom: Spacing.xxl,
+    padding: rs(Spacing.xxl),
+    marginBottom: rs(Spacing.xxl),
+  },
+  profileCardTight: {
+    padding: rs(Spacing.lg),
+    marginBottom: rs(Spacing.xl),
   },
   profileCardDivider: {
     height: 1,
@@ -189,20 +249,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
   },
+  profileRowTight: {
+    gap: Spacing.xs,
+  },
   profileRowEmoji: {
-    fontSize: 18,
+    fontSize: rf(18),
   },
   profileRowLabel: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#2E2E2E",
-    minWidth: 88,
+    minWidth: rs(88),
+  },
+  profileRowLabelTight: {
+    fontSize: rf(12),
+    minWidth: rs(65),
   },
   profileRowValue: {
     flex: 1,
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#2E2E2E",
+  },
+  profileRowValueTight: {
+    fontSize: rf(12),
   },
   divider: {
     height: 1,
@@ -213,55 +283,97 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: Spacing.xl,
   },
+  productSectionTight: {
+    marginBottom: Spacing.lg,
+  },
   productSectionInner: {
     alignSelf: "center",
   },
+  productSectionInnerTight: {
+    alignItems: "flex-start",
+  },
   sectionTitle: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 18,
+    fontSize: rf(18),
     color: "#2E2E2E",
-    lineHeight: 26,
-    marginBottom: Spacing.lg,
+    lineHeight: rf(26),
+    marginBottom: rs(Spacing.lg),
+    textAlign: "left",
+  },
+  sectionTitleTight: {
+    fontSize: rf(15),
     textAlign: "left",
   },
   bulletList: {
     gap: Spacing.md,
+  },
+  bulletListTight: {
+    gap: Spacing.sm,
+  },
+  bulletListAlignStart: {
+    alignItems: "flex-start",
   },
   bulletRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   bulletCheckBox: {
-    width: 22,
+    width: rs(22),
     alignItems: "center",
     justifyContent: "center",
   },
+  bulletCheckBoxTight: {
+    width: rs(18),
+  },
   bulletCheck: {
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: rf(16),
     color: "#325C3A",
+  },
+  bulletCheckTight: {
+    fontSize: rf(13),
   },
   bulletText: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#2E2E2E",
-    lineHeight: 22,
+    lineHeight: rf(22),
+  },
+  bulletTextTight: {
+    fontSize: rf(12),
+    lineHeight: rf(18),
   },
   buttonContainer: {
-    paddingHorizontal: OnboardingButtonBar.paddingHorizontal,
-    paddingTop: OnboardingButtonBar.paddingTop,
-    paddingBottom: OnboardingButtonBar.paddingBottom,
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal),
+    paddingTop: rs(OnboardingButtonBar.paddingTop),
+    paddingBottom: rs(OnboardingButtonBar.paddingBottom),
+  },
+  buttonContainerCompact: {
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal - Spacing.sm),
+  },
+  buttonContainerTight: {
+    paddingHorizontal: rs(OnboardingButtonBar.paddingHorizontal - Spacing.md),
+    paddingBottom: rs(OnboardingButtonBar.paddingBottom - Spacing.sm),
   },
   analyzeText: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: "#6B7280",
-    lineHeight: 22,
-    marginBottom: Spacing.lg,
+    lineHeight: rf(22),
+    marginBottom: rs(Spacing.lg),
     textAlign: "center",
+  },
+  analyzeTextTight: {
+    fontSize: rf(13),
+    lineHeight: rf(18),
+    marginBottom: rs(Spacing.md),
   },
   button: {
     backgroundColor: "#325C3A",
     ...Shadows.md,
+  },
+  buttonLabelTight: {
+    fontSize: rf(14),
+    lineHeight: rf(18),
   },
 });

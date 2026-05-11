@@ -79,7 +79,7 @@ export function Shimmer({
           width,
           height,
           borderRadius,
-          backgroundColor: "#E0DDD7",
+          backgroundColor: "#E8E4DD",
         },
         shimmerStyle,
         style,
@@ -97,7 +97,7 @@ export function ShimmerCircle({ size = 72, style }: { size?: number; style?: any
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: "#E0DDD7",
+          backgroundColor: "#E8E4DD",
         },
         shimmerStyle,
         style,
@@ -161,6 +161,46 @@ export function HistorySkeleton() {
           <Shimmer width={36} height={28} borderRadius={BorderRadius.sm} />
         </View>
       ))}
+    </View>
+  );
+}
+
+export function RecentScansSkeleton() {
+  return (
+    <View style={{ gap: 10 }}>
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          style={[
+            skeletonStyles.card,
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              padding: Spacing.md,
+            },
+          ]}
+        >
+          <Shimmer width={56} height={56} borderRadius={BorderRadius.sm} />
+          <View style={{ flex: 1, gap: 7 }}>
+            <Shimmer width="64%" height={15} />
+            <Shimmer width="34%" height={11} />
+          </View>
+          <Shimmer width={34} height={26} borderRadius={BorderRadius.sm} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function HomeHeaderSkeleton() {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+      <View style={{ flex: 1, gap: 8, paddingRight: 12 }}>
+        <Shimmer width={110} height={14} borderRadius={6} />
+        <Shimmer width={170} height={28} borderRadius={8} />
+      </View>
+      <ShimmerCircle size={44} />
     </View>
   );
 }

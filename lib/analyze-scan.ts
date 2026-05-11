@@ -15,13 +15,15 @@
  *   4. Detailed analysis (2-3s): Nutrition calculation + scoring
  *   5. Return enhanced results with meal-specific data
  */
+import { analyzeIngredients, type IngredientAnalysisResult } from "@/lib/ingredient-analysis";
 import { getCommercialFoodNutrition, type NutritionixNutrition } from "@/lib/nutritionix-api";
 import type { OnboardingProfile } from "@/lib/onboarding-storage";
-import { lookupProduct, type ProductInfo } from "@/lib/product-lookup";
+import { lookupProduct, searchOFFByTerm, searchProductByName, type ProductInfo } from "@/lib/product-lookup";
 import { computeScores, type ComputedScores } from "@/lib/scoring-engine";
 import { getIngredientNutrition, type USDANutrition } from "@/lib/usda-database";
 import type {
     AnalyzeScanRequest,
+    CameraCaptureMetadata,
     CookingAnalysis,
     CookingMethod,
     DetectedIngredient,
@@ -30,7 +32,7 @@ import type {
     PortionAdjustment,
     PortionEstimate,
     ScanNutrition,
-    ScanResult
+    ScanResult,
 } from "@/types/scan";
 
 // ---------------------------------------------------------------------------
@@ -47,11 +49,12 @@ const RETRY_DELAY_MS = 600;
 const REQUEST_TIMEOUT_MS = 8_000; // 8s — fast fail so scan feels snappy; LLM/vision fallback to score-only
 
 // Meal detection configuration
-const MEAL_DETECTION_TIMEOUT_MS = 2_000; // 2s for quick meal detection
-const CONFIDENCE_THRESHOLD = 0.75; // 75% confidence for auto-confirmation
-const MIN_INGREDIENTS_FOR_MEAL = 2; // Minimum ingredients to classify as meal
+const CONFIDENCE_THRESHOLD = 0.5; // Lower gate to avoid false negatives in meal photo mode
 const INGREDIENT_LOOKUP_TIMEOUT_MS = 1_400;
-const MIN_INGREDIENT_GRAMS = 5;
+const OFF_INGREDIENT_LOOKUP_TIMEOUT_MS = 900;
+const MIN_INGREDIENT_GRAMS = 1;
+const QUICK_MEAL_DETECTION_TIMEOUT_MS = 4_000;
+const ENHANCEMENT_STAGE_TIMEOUT_MS = 1_800;
 
 const INGREDIENT_NAME_ALIASES: Record<string, string> = {
   "sweet potatoes": "Sweet Potato",
@@ -82,9 +85,228 @@ type PortionPriorConfig = {
 };
 
 type LearnedPrior = NonNullable<AnalyzeScanRequest["learnedPortionPriors"]>[number];
+type VisualPrior = NonNullable<AnalyzeScanRequest["visualPortionPriors"]>[number];
+
+type PhotoAnalysisStageUpdate = {
+  stage: "detect" | "analyze" | "portion" | "validate";
+  progress: number;
+  message: string;
+};
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function toTitleCaseWords(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+    .replace(/\s+/g, " ");
+}
+
+function buildMealName(mealDetection: MealDetectionResult): string {
+  const names = mealDetection.ingredients.map((i) => i.name.toLowerCase());
+  const has = (patterns: RegExp[]) => patterns.some((p) => names.some((n) => p.test(n)));
+  const findFirst = (pairs: Array<{ label: string; test: RegExp }>): string | null => {
+    for (const pair of pairs) {
+      if (names.some((n) => pair.test.test(n))) return pair.label;
+    }
+    return null;
+  };
+
+  if (has([/waffle/, /pancake/])) {
+    const toppings = [
+      findFirst([
+        { label: "Berries", test: /(berry|strawberry|blueberry|raspberry)/ },
+        { label: "Banana", test: /banana/ },
+        { label: "Honey", test: /honey/ },
+        { label: "Maple Syrup", test: /(maple|syrup)/ },
+        { label: "Chocolate", test: /chocolate/ },
+      ]),
+    ].filter(Boolean) as string[];
+    return toppings.length > 0 ? `Waffles with ${toppings.join(" and ")}` : "Waffles";
+  }
+
+  const protein = findFirst([
+    { label: "Chicken", test: /chicken/ },
+    { label: "Salmon", test: /salmon/ },
+    { label: "Tuna", test: /tuna/ },
+    { label: "Egg", test: /egg/ },
+    { label: "Tofu", test: /tofu/ },
+    { label: "Beef", test: /beef/ },
+    { label: "Shrimp", test: /shrimp|prawn/ },
+    { label: "Chickpea", test: /chickpea|garbanzo/ },
+  ]);
+  const hasSaladBase = has([/lettuce/, /arugula/, /spinach/, /greens/, /kale/, /cabbage/]);
+  if (protein && hasSaladBase) {
+    return `${protein} Salad`;
+  }
+
+  const method = (mealDetection.cookingMethods[0] || "").toLowerCase();
+  const methodLabel =
+    method === "sautéed"
+      ? "Sauteed"
+      : method
+        ? toTitleCaseWords(method)
+        : "";
+
+  const base = findFirst([
+    { label: "Rice", test: /rice/ },
+    { label: "Quinoa", test: /quinoa/ },
+    { label: "Pasta", test: /pasta|noodle/ },
+    { label: "Bowl", test: /grain|lentil|bean/ },
+  ]);
+
+  if (protein && methodLabel) {
+    return base ? `${methodLabel} ${protein} with ${base}` : `${methodLabel} ${protein}`;
+  }
+  if (protein) return base ? `${protein} with ${base}` : `${protein} Meal`;
+  if (hasSaladBase) return "Mixed Salad";
+  return `Custom Meal (${mealDetection.ingredients.length} ingredients)`;
+}
+
+function classifyMealIngredientTier(estimatedGrams: number): "main" | "supporting" | "micro" {
+  if (estimatedGrams >= 20) return "main";
+  if (estimatedGrams >= 5) return "supporting";
+  return "micro";
+}
+
+function inferMealIngredientImpact(
+  name: string,
+  state: DetectedIngredient["state"],
+  cookingMethod?: DetectedIngredient["cookingMethod"],
+): "negative" | "moderate" | "positive" {
+  const n = name.toLowerCase();
+  if (/(leafy|spinach|arugula|kale|broccoli|cucumber|tomato|onion|garlic|ginger|turmeric|lentil|chickpea|beans|quinoa|oats|avocado|olive oil)/.test(n)) {
+    return "positive";
+  }
+  if (
+    /(sugar|syrup|fructose|maltodextrin|refined|processed meat|sausage|bacon|deep fry|fried|tortilla chips|fried tortilla|white flour|maida|shortening|hydrogenated|palm oil)/.test(
+      n,
+    )
+  ) {
+    return "negative";
+  }
+  if (cookingMethod === "fried") {
+    return "negative";
+  }
+  if (state === "processed") {
+    return "moderate";
+  }
+  return "moderate";
+}
+
+async function generateMealNameWithAI(mealDetection: MealDetectionResult): Promise<string | null> {
+  try {
+    const ingredientPayload = mealDetection.ingredients.map((ingredient) => ({
+      name: ingredient.name,
+      cookingMethod: ingredient.cookingMethod ?? null,
+      state: ingredient.state,
+      grams: ingredient.estimatedGrams ?? null,
+    }));
+
+    const raw = await callGroqRaw(
+      [
+        {
+          role: "system",
+          content:
+            "You name meals from ingredient lists. Return JSON only: {\"meal_name\": string}. Keep name concise (2-5 words), specific, title-case, no brand names, no emojis, no trailing punctuation.",
+        },
+        {
+          role: "user",
+          content: `Generate the best meal name from this detected meal JSON: ${JSON.stringify({
+            ingredients: ingredientPayload,
+            cookingMethods: mealDetection.cookingMethods,
+          })}`,
+        },
+      ],
+      GROQ_TEXT_MODEL,
+      1800,
+    );
+
+    const parsed = safeParse<{ meal_name?: string }>(raw);
+    const mealName = parsed?.meal_name?.trim();
+    if (!mealName) return null;
+    const cleaned = mealName.replace(/[.!?]+$/g, "").replace(/\s+/g, " ").trim();
+    if (!cleaned || cleaned.length < 4) return null;
+    return cleaned;
+  } catch {
+    return null;
+  }
+}
+
+function buildMealIngredientAnalysis(mealDetection: MealDetectionResult): IngredientAnalysisResult {
+  const tierCounts = { main: 0, supporting: 0, micro: 0 };
+  let redCount = 0;
+  let yellowCount = 0;
+  let greenCount = 0;
+
+  const items = mealDetection.ingredients.map((ingredient) => {
+    const grams = Math.max(MIN_INGREDIENT_GRAMS, ingredient.estimatedGrams ?? MIN_INGREDIENT_GRAMS);
+    const tier = classifyMealIngredientTier(grams);
+    tierCounts[tier] += 1;
+
+    const impact = inferMealIngredientImpact(ingredient.name, ingredient.state, ingredient.cookingMethod);
+    if (impact === "negative") redCount += 1;
+    else if (impact === "moderate") yellowCount += 1;
+    else greenCount += 1;
+
+    const whyMatters =
+      impact === "positive"
+        ? `${ingredient.name} is generally gut-supportive at this portion and can help meal diversity for the microbiome.`
+        : impact === "negative"
+          ? `${ingredient.name} may increase gut irritation or inflammation sensitivity depending on portion and preparation.`
+          : `${ingredient.name} is context-dependent for gut health; portion size and combination with fiber-rich foods matter.`;
+
+    return {
+      displayName: ingredient.name,
+      impact,
+      whyMatters,
+      tier,
+      estimatedGrams: grams,
+    };
+  });
+
+  return {
+    items,
+    redCount,
+    yellowCount,
+    greenCount,
+    tierCounts,
+  };
+}
+
+function createFallbackMealDetection(
+  learnedPriorMap?: Map<string, LearnedPrior>
+): MealDetectionResult {
+  return sanitizeMealDetection(
+    {
+      isMeal: true,
+      confidence: 0.45,
+      ingredients: [
+        {
+          name: "Mixed Meal",
+          state: "cooked",
+          confidence: 0.52,
+          boundingBox: { x: 0, y: 0, width: 1, height: 1 },
+          estimatedGrams: 320,
+          itemCount: 1,
+        },
+      ],
+      cookingMethods: [],
+      portionEstimates: [
+        {
+          ingredientName: "Mixed Meal",
+          estimatedGrams: 320,
+          confidence: 0.5,
+          visualReference: "full plate portion",
+        },
+      ],
+      totalEstimatedCalories: undefined,
+    },
+    learnedPriorMap,
+  );
 }
 
 function normalizeCookingMethod(raw?: string | null): CookingMethod | undefined {
@@ -137,6 +359,172 @@ function buildLearnedPriorMap(
     });
   }
   return out;
+}
+
+function buildVisualPriorMap(
+  priors?: AnalyzeScanRequest["visualPortionPriors"]
+): Map<string, VisualPrior> {
+  const out = new Map<string, VisualPrior>();
+  if (!Array.isArray(priors)) return out;
+  for (const prior of priors) {
+    const key = normalizeIngredientName(prior?.ingredientName ?? "").toLowerCase();
+    if (!key) continue;
+    const conversionFactor = Number(prior?.conversionFactor ?? 0);
+    const sampleCount = Number(prior?.sampleCount ?? 0);
+    const confidence = Number(prior?.confidence ?? 0);
+    if (!isFinite(conversionFactor) || conversionFactor <= 0 || !isFinite(sampleCount) || sampleCount < 2) continue;
+    out.set(key, {
+      ingredientName: normalizeIngredientName(prior.ingredientName),
+      conversionFactor,
+      sampleCount: Math.max(0, Math.round(sampleCount)),
+      confidence: clampNumber(confidence, 0, 1),
+    });
+  }
+  return out;
+}
+
+function getPortionVisualFallback(grams: number): string {
+  if (grams <= 20) return `thumb-tip amount (~${grams}g)`;
+  if (grams <= 45) return `thumb-sized amount (~${grams}g)`;
+  if (grams <= 100) return `palm-sized portion (~${grams}g)`;
+  if (grams <= 170) return `deck-of-cards portion (~${grams}g)`;
+  if (grams <= 280) return `fist-sized portion (~${grams}g)`;
+  return `two-palm portion (~${grams}g)`;
+}
+
+function applyMetadataAwarePortionCalibration(
+  mealDetection: MealDetectionResult,
+  learnedPriorMap?: Map<string, LearnedPrior>,
+  visualPriorMap?: Map<string, VisualPrior>,
+  cameraMetadata?: CameraCaptureMetadata,
+): MealDetectionResult {
+  if (!mealDetection.isMeal || mealDetection.ingredients.length === 0) return mealDetection;
+
+  const hasCameraMetadata =
+    !!cameraMetadata &&
+    (typeof cameraMetadata.focalLengthMm === "number" ||
+      typeof cameraMetadata.digitalZoomRatio === "number" ||
+      typeof cameraMetadata.subjectDistanceM === "number" ||
+      cameraMetadata.hasDepthData === true);
+  const imageArea =
+    typeof cameraMetadata?.width === "number" &&
+    typeof cameraMetadata?.height === "number" &&
+    cameraMetadata.width > 0 &&
+    cameraMetadata.height > 0
+      ? cameraMetadata.width * cameraMetadata.height
+      : null;
+  const hasDepthData = cameraMetadata?.hasDepthData === true;
+
+  const ingredientByKey = new Map<string, DetectedIngredient>();
+  for (const ingredient of mealDetection.ingredients) {
+    ingredientByKey.set(ingredient.name.toLowerCase(), ingredient);
+  }
+
+  const calibratedPortions = mealDetection.portionEstimates.map((portion) => {
+    const key = portion.ingredientName.toLowerCase();
+    const ingredient = ingredientByKey.get(key);
+    const prior = getPortionPrior(portion.ingredientName, ingredient, learnedPriorMap);
+    const baseGrams = Math.max(MIN_INGREDIENT_GRAMS, Math.round(portion.estimatedGrams || prior.defaultGrams));
+
+    const bboxAreaRaw = ingredient?.boundingBox
+      ? Math.max(0, (ingredient.boundingBox.width || 0) * (ingredient.boundingBox.height || 0))
+      : 0;
+    const normalizedArea =
+      bboxAreaRaw > 0
+        ? bboxAreaRaw <= 1
+          ? bboxAreaRaw
+          : imageArea && imageArea > 0
+            ? bboxAreaRaw / imageArea
+            : null
+        : null;
+
+    const visualPrior = visualPriorMap?.get(key);
+    const visualPriorEstimate =
+      normalizedArea != null && visualPrior
+        ? Math.round(normalizedArea * visualPrior.conversionFactor)
+        : null;
+
+    let metadataFactor = 1;
+    if (hasCameraMetadata) {
+      if (typeof cameraMetadata?.focalLengthMm === "number" && isFinite(cameraMetadata.focalLengthMm)) {
+        metadataFactor *= clampNumber(cameraMetadata.focalLengthMm / 4.2, 0.82, 1.25);
+      }
+      if (typeof cameraMetadata?.digitalZoomRatio === "number" && isFinite(cameraMetadata.digitalZoomRatio) && cameraMetadata.digitalZoomRatio > 0) {
+        metadataFactor *= clampNumber(1 / cameraMetadata.digitalZoomRatio, 0.82, 1.18);
+      }
+      if (typeof cameraMetadata?.subjectDistanceM === "number" && isFinite(cameraMetadata.subjectDistanceM) && cameraMetadata.subjectDistanceM > 0) {
+        metadataFactor *= clampNumber(0.42 / cameraMetadata.subjectDistanceM, 0.8, 1.3);
+      }
+      if (hasDepthData) {
+        metadataFactor *= 1.05;
+      }
+    }
+
+    const metadataEstimate = hasCameraMetadata ? Math.round(baseGrams * metadataFactor) : null;
+
+    let calibrated = baseGrams;
+    if (visualPriorEstimate != null && metadataEstimate != null) {
+      calibrated = Math.round(baseGrams * 0.35 + visualPriorEstimate * 0.35 + metadataEstimate * 0.3);
+    } else if (visualPriorEstimate != null) {
+      calibrated = Math.round(baseGrams * 0.45 + visualPriorEstimate * 0.55);
+    } else if (metadataEstimate != null) {
+      calibrated = Math.round(baseGrams * 0.55 + metadataEstimate * 0.45);
+    }
+
+    const clamped = Math.round(
+      clampNumber(calibrated, Math.max(MIN_INGREDIENT_GRAMS, prior.minGrams), Math.max(prior.maxGrams, Math.round(prior.maxGrams * 1.8)))
+    );
+
+    const confidenceBoost =
+      (metadataEstimate != null ? 0.06 : 0) +
+      (visualPriorEstimate != null && visualPrior ? 0.08 * clampNumber(visualPrior.confidence, 0, 1) : 0);
+
+    const visualReference =
+      metadataEstimate != null
+        ? `camera metadata${hasDepthData ? " + depth" : ""} calibrated, ${getPortionVisualFallback(clamped)}`
+        : visualPriorEstimate != null
+          ? `learned visual prior calibrated, ${getPortionVisualFallback(clamped)}`
+          : portion.visualReference?.trim() || getPortionVisualFallback(clamped);
+
+    return {
+      ...portion,
+      estimatedGrams: clamped,
+      confidence: clampNumber((portion.confidence || 0.55) + confidenceBoost, 0.1, 1),
+      visualReference,
+    };
+  });
+
+  const calibratedIngredientByKey = new Map<string, number>();
+  for (const portion of calibratedPortions) {
+    calibratedIngredientByKey.set(portion.ingredientName.toLowerCase(), portion.estimatedGrams);
+  }
+
+  const calibratedIngredients = mealDetection.ingredients.map((ingredient) => {
+    const grams = calibratedIngredientByKey.get(ingredient.name.toLowerCase());
+    return {
+      ...ingredient,
+      estimatedGrams: grams ?? ingredient.estimatedGrams,
+    };
+  });
+
+  return {
+    ...mealDetection,
+    ingredients: calibratedIngredients,
+    portionEstimates: calibratedPortions,
+  };
+}
+
+function validateMealDetectionResult(
+  mealDetection: MealDetectionResult,
+  learnedPriorMap?: Map<string, LearnedPrior>,
+): MealDetectionResult {
+  const validated = sanitizeMealDetection(mealDetection, learnedPriorMap);
+  const coverage = scoreMealDetectionCoverage(validated);
+  const confidenceBonus = coverage >= 20 ? 0.06 : coverage >= 14 ? 0.03 : 0;
+  return {
+    ...validated,
+    confidence: clampNumber(validated.confidence + confidenceBonus, 0.1, 1),
+  };
 }
 
 function getPortionPrior(
@@ -332,14 +720,91 @@ function scoreMealDetectionCoverage(result: MealDetectionResult): number {
   if (hasNamedIngredient(result.ingredients, "Balsamic Vinegar")) specificityBonus += 1;
   if (hasNamedIngredient(result.ingredients, "Tzatziki")) specificityBonus += 1;
 
-  return ingredientCount * 3 + (hasPortionForAll ? 2 : 0) + specificityBonus;
+  const microIngredientCount = result.ingredients.filter((ingredient) =>
+    /(pepper|salt|herb|oregano|basil|cilantro|parsley|dill|chili|paprika|cumin|vinegar|sauce|dressing|oil|sesame)/i.test(
+      ingredient.name,
+    ),
+  ).length;
+
+  return ingredientCount * 3 + (hasPortionForAll ? 2 : 0) + specificityBonus + Math.min(8, microIngredientCount);
+}
+
+function mergeMealDetectionResults(
+  base: MealDetectionResult,
+  incoming: MealDetectionResult,
+  learnedPriorMap?: Map<string, LearnedPrior>,
+): MealDetectionResult {
+  const mergedIngredients = new Map<string, DetectedIngredient>();
+  for (const ingredient of base.ingredients) {
+    mergedIngredients.set(ingredient.name.toLowerCase(), { ...ingredient });
+  }
+
+  for (const ingredient of incoming.ingredients) {
+    const key = ingredient.name.toLowerCase();
+    const existing = mergedIngredients.get(key);
+    if (!existing) {
+      mergedIngredients.set(key, { ...ingredient });
+      continue;
+    }
+
+    const incomingWins = (ingredient.confidence ?? 0) > (existing.confidence ?? 0);
+    mergedIngredients.set(key, {
+      ...(incomingWins ? existing : ingredient),
+      ...(incomingWins ? ingredient : existing),
+      itemCount: Math.max(existing.itemCount ?? 1, ingredient.itemCount ?? 1),
+      estimatedGrams: Math.max(existing.estimatedGrams ?? MIN_INGREDIENT_GRAMS, ingredient.estimatedGrams ?? MIN_INGREDIENT_GRAMS),
+      confidence: Math.max(existing.confidence ?? 0.5, ingredient.confidence ?? 0.5),
+    });
+  }
+
+  const mergedPortions = new Map<string, PortionEstimate>();
+  for (const estimate of base.portionEstimates) {
+    mergedPortions.set(estimate.ingredientName.toLowerCase(), { ...estimate });
+  }
+  for (const estimate of incoming.portionEstimates) {
+    const key = estimate.ingredientName.toLowerCase();
+    const existing = mergedPortions.get(key);
+    if (!existing) {
+      mergedPortions.set(key, { ...estimate });
+      continue;
+    }
+    if ((estimate.confidence ?? 0) >= (existing.confidence ?? 0)) {
+      mergedPortions.set(key, {
+        ...estimate,
+        estimatedGrams: Math.max(estimate.estimatedGrams ?? MIN_INGREDIENT_GRAMS, existing.estimatedGrams ?? MIN_INGREDIENT_GRAMS),
+      });
+    }
+  }
+
+  const merged: MealDetectionResult = {
+    isMeal: base.isMeal || incoming.isMeal,
+    confidence: Math.max(base.confidence ?? 0.5, incoming.confidence ?? 0.5),
+    ingredients: [...mergedIngredients.values()],
+    cookingMethods: Array.from(new Set([...(base.cookingMethods ?? []), ...(incoming.cookingMethods ?? [])])),
+    portionEstimates: [...mergedPortions.values()],
+    totalEstimatedCalories: incoming.totalEstimatedCalories ?? base.totalEstimatedCalories,
+  };
+
+  return sanitizeMealDetection(merged, learnedPriorMap);
+}
+
+function buildEnhancementPrompt(stage: "macro" | "micro" | "trace", baseResult: MealDetectionResult): string {
+  const stageGoal =
+    stage === "macro"
+      ? "Focus on main ingredients and core components larger than ~5g."
+      : stage === "micro"
+        ? "Focus on small but meaningful ingredients: herbs, spices, toppings, sauces, dressings, oils."
+        : "Focus on trace-level visible components and finishers: pepper flakes, herb dust, light sauce drizzles, seasoning residues.";
+
+  return `Current detection JSON (may be incomplete): ${JSON.stringify(baseResult)}\n\n${stageGoal}\nReturn a corrected full JSON result for this same image. Include every clearly visible ingredient and provide realistic grams for each.`;
 }
 
 async function refineMealDetection(
   imageBase64: string,
   mimeType: string,
   baseResult: MealDetectionResult,
-  learnedPriorMap?: Map<string, LearnedPrior>
+  learnedPriorMap?: Map<string, LearnedPrior>,
+  stage: "macro" | "micro" | "trace" = "macro",
 ): Promise<MealDetectionResult | null> {
   if (!baseResult.isMeal) return null;
 
@@ -373,13 +838,14 @@ Rules:
         content: [
           {
             type: "text",
-            text: `Current detection JSON (may be incomplete): ${JSON.stringify(baseResult)}\nReturn a corrected full JSON result for this same image.`,
+            text: buildEnhancementPrompt(stage, baseResult),
           },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
       },
     ],
-    GROQ_VISION_MODEL
+    GROQ_VISION_MODEL,
+    ENHANCEMENT_STAGE_TIMEOUT_MS,
   );
 
   const parsed = safeParse<MealDetectionResult>(raw);
@@ -400,7 +866,8 @@ mood (string, how this product affects energy/mood and why),
 bloatDetails (object: expectedTime string e.g. "2-3 hours", tip string with a specific actionable tip),
 impactDetails (object: skin object {description string, learnMore {title string, content string, sensitivity string}}, bloating object {description string, learnMore {title string, content string, timing string}}, digestion object {description string, learnMore {title string, content string}}, energy object {description string, learnMore {title string, content string}}),
 goalPrediction (object: forecast array of {time string, risk string, description string}, improvements array of {action string, newScore string, impact string}),
-personalizedInsights (array of 3 objects: type "trigger"|"quick_win"|"pattern"|"great_choice"|"warning", title string, detail string, tip string optional, stat string optional, swap object optional {from string, to string, scoreChange string}).
+personalizedInsights (array of 3 objects: type "trigger"|"quick_win"|"pattern"|"great_choice"|"warning", title string, detail string, tip string optional, stat string optional, swap object optional {from string, to string, scoreChange string}),
+ingredientAnalysis (object: items array of {displayName string, impact string "negative"|"moderate"|"positive", whyMatters string}, redCount number, yellowCount number, greenCount number).
 Output valid JSON only: no trailing commas, no unescaped newlines inside string values.`;
 
 // ---------------------------------------------------------------------------
@@ -532,6 +999,29 @@ function splitIngredientsRespectingParens(raw: string): string[] {
     .filter(Boolean);
 }
 
+function normalizeIngredientKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b(and|or)\b/g, " ")
+    .replace(/[^a-z0-9%\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dedupeIngredientList(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const key = normalizeIngredientKey(item);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item.trim());
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Groq API
 // ---------------------------------------------------------------------------
@@ -545,7 +1035,11 @@ type GroqMessage =
         | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
     };
 
-async function callGroqRaw(messages: GroqMessage[], model: string): Promise<string> {
+async function callGroqRaw(
+  messages: GroqMessage[],
+  model: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<string> {
   if (!GROQ_API_KEY) {
     throw new Error(
       "EXPO_PUBLIC_GROQ_API_KEY is not set. Add it to your .env file. Get a free key at https://console.groq.com"
@@ -553,7 +1047,7 @@ async function callGroqRaw(messages: GroqMessage[], model: string): Promise<stri
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   let res: Response;
   try {
@@ -616,6 +1110,7 @@ interface AnalysisText {
   impactDetails?: ScanResult["analysis"]["impactDetails"];
   goalPrediction?: ScanResult["analysis"]["goalPrediction"];
   personalizedInsights?: ScanResult["analysis"]["personalizedInsights"];
+  ingredientAnalysis?: ScanResult["analysis"]["ingredientAnalysis"];
 }
 
 async function generateAnalysisText(
@@ -641,6 +1136,17 @@ async function generateAnalysisText(
 
   const scoresDesc = `Bloat score: ${scores.bloat_score}/100 (lower=less bloating), Skin: ${scores.skin_score}/10, Energy: ${scores.energy_score}/10, Digestion: ${scores.digestion_score}/10, Overall gut: ${scores.gut_score}/100`;
 
+  // Analyze ingredients for detailed classification
+  let ingredientAnalysis: IngredientAnalysisResult | null = null;
+  if (product.ingredients) {
+    try {
+      const ingredientList = dedupeIngredientList(splitIngredientsRespectingParens(product.ingredients));
+      ingredientAnalysis = await analyzeIngredients(ingredientList, product.name, profile);
+    } catch (error) {
+      console.warn("[ingredient-analysis] Failed to analyze ingredients:", error);
+    }
+  }
+
   const system = `You are a gut-health and wellness assistant. The product and scores are already determined — do NOT change them. Your job is to explain WHY the product received these scores and give personalized, actionable advice. ${ctx}${ANALYSIS_JSON_SCHEMA}`;
 
   const userText = `${productDesc}\nNutrition per 100g: ${nutritionDesc || "not available"}\nComputed scores: ${scoresDesc}\n\nExplain why this product got these scores. Be specific about which ingredients or nutritional values drive each score. All tips and insights must be specific to "${product.name}", not generic.`;
@@ -653,7 +1159,14 @@ async function generateAnalysisText(
     GROQ_TEXT_MODEL
   );
 
-  return safeParse<AnalysisText>(raw) ?? { summary: `${product.name} analysis completed.`, tips: [] };
+  const analysisText = safeParse<AnalysisText>(raw) ?? { summary: `${product.name} analysis completed.`, tips: [] };
+  
+  // Use our dedicated ingredient analysis if available, otherwise use LLM's attempt
+  if (ingredientAnalysis) {
+    analysisText.ingredientAnalysis = ingredientAnalysis;
+  }
+  
+  return analysisText;
 }
 
 // ---------------------------------------------------------------------------
@@ -825,10 +1338,15 @@ Always extract ingredients and nutrition when they appear on the package. If you
 async function quickMealDetection(
   imageBase64: string,
   mimeType: string,
-  learnedPriors?: AnalyzeScanRequest["learnedPortionPriors"]
+  learnedPriors?: AnalyzeScanRequest["learnedPortionPriors"],
+  visualPriors?: AnalyzeScanRequest["visualPortionPriors"],
+  cameraMetadata?: CameraCaptureMetadata,
+  onStageUpdate?: (update: PhotoAnalysisStageUpdate) => void,
 ): Promise<MealDetectionResult> {
   const learnedPriorMap = buildLearnedPriorMap(learnedPriors);
+  const visualPriorMap = buildVisualPriorMap(visualPriors);
   const imageUrl = `data:${mimeType};base64,${imageBase64}`;
+  onStageUpdate?.({ stage: "detect", progress: 16, message: "Detecting ingredients" });
   const raw = await callGroqRaw(
     [
       {
@@ -868,27 +1386,45 @@ Focus on visual accuracy for portion estimation. Set confidence below 0.75 if un
       },
     ],
     GROQ_VISION_MODEL,
+    QUICK_MEAL_DETECTION_TIMEOUT_MS,
   );
 
   const parsed = safeParse<MealDetectionResult>(raw);
   if (!parsed || typeof parsed.isMeal !== "boolean") {
-    console.warn("[meal-detection] Invalid response, falling back to product mode");
-    return {
-      isMeal: false,
-      ingredients: [],
-      cookingMethods: [],
-      portionEstimates: [],
-      confidence: 0.5,
-    };
+    console.warn("[meal-detection] Invalid response, using editable fallback meal detection");
+    return createFallbackMealDetection(learnedPriorMap);
   }
 
   let sanitized = sanitizeMealDetection(parsed, learnedPriorMap);
   if (sanitized.isMeal) {
     try {
-      const refined = await refineMealDetection(imageBase64, mimeType, sanitized, learnedPriorMap);
-      if (refined && scoreMealDetectionCoverage(refined) >= scoreMealDetectionCoverage(sanitized)) {
-        sanitized = refined;
+      onStageUpdate?.({ stage: "analyze", progress: 32, message: "Analyzing ingredient detail" });
+      const stageResults = await Promise.allSettled([
+        refineMealDetection(imageBase64, mimeType, sanitized, learnedPriorMap, "macro"),
+        refineMealDetection(imageBase64, mimeType, sanitized, learnedPriorMap, "micro"),
+        refineMealDetection(imageBase64, mimeType, sanitized, learnedPriorMap, "trace"),
+      ]);
+
+      let merged = sanitized;
+      for (const stage of stageResults) {
+        if (stage.status !== "fulfilled" || !stage.value) continue;
+        merged = mergeMealDetectionResults(merged, stage.value, learnedPriorMap);
       }
+
+      if (scoreMealDetectionCoverage(merged) >= scoreMealDetectionCoverage(sanitized)) {
+        sanitized = merged;
+      }
+
+      onStageUpdate?.({ stage: "portion", progress: 58, message: "Calibrating portions" });
+      sanitized = applyMetadataAwarePortionCalibration(
+        sanitized,
+        learnedPriorMap,
+        visualPriorMap,
+        cameraMetadata,
+      );
+
+      onStageUpdate?.({ stage: "validate", progress: 70, message: "Validating meal components" });
+      sanitized = validateMealDetectionResult(sanitized, learnedPriorMap);
     } catch (refineErr) {
       const msg = refineErr instanceof Error ? refineErr.message : String(refineErr);
       if (!isQuotaError(msg)) {
@@ -917,10 +1453,10 @@ function classifyScanType(
     return "product";
   }
 
-  // Priority 2: High confidence meal detection with multiple ingredients
+  // Priority 2: Meal detection with lower confidence gate for smoother UX
   if (mealDetection.isMeal && 
       mealDetection.confidence >= CONFIDENCE_THRESHOLD &&
-      mealDetection.ingredients.length >= MIN_INGREDIENTS_FOR_MEAL) {
+      mealDetection.ingredients.length >= 1) {
     return "meal";
   }
 
@@ -969,7 +1505,7 @@ function createPortionAdjustments(
   return mealDetection.portionEstimates.map((estimate: PortionEstimate) => ({
     ingredientName: estimate.ingredientName,
     currentGrams: estimate.estimatedGrams,
-    minGrams: Math.max(10, Math.round(estimate.estimatedGrams * 0.5)),
+    minGrams: Math.max(MIN_INGREDIENT_GRAMS, Math.round(estimate.estimatedGrams * 0.5)),
     maxGrams: Math.round(estimate.estimatedGrams * 2),
     suggestedGrams: estimate.estimatedGrams,
     visualReference: estimate.visualReference || "standard serving",
@@ -1038,6 +1574,29 @@ function estimateIngredientNutritionFallback(ingredient: DetectedIngredient, gra
     base.protein_g = 24 * factor;
     base.fat_g = 10 * factor;
     base.sodium_mg = 80 * factor;
+  } else if (/(beans|lentil|chickpea|black bean|kidney bean|garbanzo)/.test(n)) {
+    base.calories = 145 * factor;
+    base.carbs_g = 25 * factor;
+    base.protein_g = 9 * factor;
+    base.fiber_g = 8 * factor;
+    base.sugar_g = 2 * factor;
+    base.sodium_mg = 15 * factor;
+  } else if (/(wrap|tortilla|flatbread)/.test(n)) {
+    base.calories = 310 * factor;
+    base.carbs_g = 52 * factor;
+    base.protein_g = 8 * factor;
+    base.fat_g = 8 * factor;
+    base.fiber_g = 6 * factor;
+    base.sugar_g = 2 * factor;
+    base.sodium_mg = 520 * factor;
+  } else if (/(hummus|tahini|dressing|sauce|mayo|mayonnaise)/.test(n)) {
+    base.calories = 260 * factor;
+    base.carbs_g = 11 * factor;
+    base.protein_g = 6 * factor;
+    base.fat_g = 20 * factor;
+    base.fiber_g = 3 * factor;
+    base.sugar_g = 2.5 * factor;
+    base.sodium_mg = 420 * factor;
   } else if (/(rice|bread|pasta|noodle|potato|tortilla)/.test(n)) {
     base.calories = 150 * factor;
     base.carbs_g = 30 * factor;
@@ -1084,6 +1643,26 @@ function estimateIngredientNutritionFallback(ingredient: DetectedIngredient, gra
   return base;
 }
 
+async function getOffIngredientNutrition(name: string): Promise<ScanNutrition | null> {
+  const candidates = await withTimeout(
+    searchOFFByTerm(name, 3).catch(() => []),
+    OFF_INGREDIENT_LOOKUP_TIMEOUT_MS,
+  );
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const hit = candidates.find((candidate) => !!candidate.nutrition) ?? candidates[0];
+  if (!hit?.nutrition) return null;
+  return {
+    calories: hit.nutrition.calories,
+    protein_g: hit.nutrition.protein_g,
+    carbs_g: hit.nutrition.carbs_g,
+    fat_g: hit.nutrition.fat_g,
+    fiber_g: hit.nutrition.fiber_g,
+    sugar_g: hit.nutrition.sugar_g,
+    sodium_mg: hit.nutrition.sodium_mg,
+    saturated_fat_g: hit.nutrition.saturated_fat_g,
+  };
+}
+
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   try {
     return await Promise.race<T | null>([
@@ -1119,7 +1698,7 @@ async function calculateMealNutrition(
   const perIngredientNutrition = await Promise.all(
     ingredients.map(async (ingredient): Promise<ScanNutrition> => {
       const portion = normalizedPortions.find((p) => p._key === ingredient.name.toLowerCase().trim());
-      const grams = Math.max(10, portion?.estimatedGrams ?? ingredient.estimatedGrams ?? 100);
+      const grams = Math.max(MIN_INGREDIENT_GRAMS, portion?.estimatedGrams ?? ingredient.estimatedGrams ?? 100);
       const factor = grams / 100;
       const preferCommercial = isLikelyCommercialIngredient(
         ingredient.name,
@@ -1129,10 +1708,13 @@ async function calculateMealNutrition(
 
       let usda: USDANutrition | null = null;
       let nutritionix: NutritionixNutrition | null = null;
+      const lookupName = ingredient.cookingMethod
+        ? `${ingredient.cookingMethod} ${ingredient.name}`
+        : ingredient.name;
 
       if (preferCommercial) {
         nutritionix = await withTimeout(
-          getCommercialFoodNutrition(ingredient.name),
+          getCommercialFoodNutrition(lookupName),
           INGREDIENT_LOOKUP_TIMEOUT_MS
         );
         if (!nutritionix) {
@@ -1148,13 +1730,16 @@ async function calculateMealNutrition(
         );
         if (!usda) {
           nutritionix = await withTimeout(
-            getCommercialFoodNutrition(ingredient.name),
+            getCommercialFoodNutrition(lookupName),
             INGREDIENT_LOOKUP_TIMEOUT_MS
           );
         }
       }
 
-      const sourceNutrition = usda ?? nutritionix;
+      const offNutrition = !usda && !nutritionix
+        ? await getOffIngredientNutrition(ingredient.name)
+        : null;
+      const sourceNutrition = usda ?? nutritionix ?? offNutrition;
       if (!sourceNutrition) {
         return estimateIngredientNutritionFallback(ingredient, grams);
       }
@@ -1217,6 +1802,12 @@ async function processMealScan(
   onQuickResult?: (result: ScanResult) => void
 ): Promise<ScanResult> {
   console.log("[meal-scan] Processing meal with", mealDetection.ingredients.length, "ingredients");
+  const heuristicMealTitle = buildMealName(mealDetection);
+  const aiMealTitle =
+    heuristicMealTitle.startsWith("Custom Meal") || heuristicMealTitle === "Mixed Salad"
+      ? await generateMealNameWithAI(mealDetection)
+      : null;
+  const mealTitle = aiMealTitle ?? heuristicMealTitle;
 
   // Calculate combined nutrition for all ingredients (now async)
   const mealNutrition = await calculateMealNutrition(mealDetection.ingredients, mealDetection.portionEstimates);
@@ -1226,6 +1817,7 @@ async function processMealScan(
   
   // Create portion adjustments for user confirmation
   const portionAdjustments = createPortionAdjustments(mealDetection);
+  const ingredientAnalysis = buildMealIngredientAnalysis(mealDetection);
 
   // Create meal components for detailed analysis
   const mealComponents: MealComponent[] = mealDetection.ingredients.map((ingredient, index) => {
@@ -1249,7 +1841,7 @@ async function processMealScan(
 
   // Create a synthetic product for scoring
   const syntheticProduct: ProductInfo = {
-    name: `Custom Meal (${mealDetection.ingredients.length} ingredients)`,
+    name: mealTitle,
     brand: "Homemade",
     barcode: "",
     imageUrl: undefined,
@@ -1265,8 +1857,8 @@ async function processMealScan(
   // Build quick result for immediate UI feedback
   const quickResult: ScanResult = {
     scan_type: "photo",
-    food_name: "Custom Meal",
-    product_name: "Custom Meal",
+    food_name: mealTitle,
+    product_name: mealTitle,
     manufacturer: "Homemade",
     identified_foods: mealDetection.ingredients.map(i => i.name),
     gut_score: scores.gut_score,
@@ -1276,8 +1868,9 @@ async function processMealScan(
     digestion_score: scores.digestion_score,
     confidence: scores.confidence,
     analysis: {
-      summary: `Meal with ${mealDetection.ingredients.length} ingredients. ${cookingAnalysis.recommendations[0]}`,
+      summary: `${mealTitle} with ${mealDetection.ingredients.length} detected ingredients. ${cookingAnalysis.recommendations[0]}`,
       tips: cookingAnalysis.recommendations,
+      ingredientAnalysis,
     },
     nutrition: mealNutrition,
     isMeal: true,
@@ -1318,6 +1911,7 @@ async function processMealScan(
       impactDetails: analysis.impactDetails,
       goalPrediction: analysis.goalPrediction,
       personalizedInsights: analysis.personalizedInsights,
+      ingredientAnalysis: analysis.ingredientAnalysis ?? quickResult.analysis.ingredientAnalysis,
     },
   };
 }
@@ -1326,15 +1920,13 @@ async function processMealScan(
 async function processProductPhotoScan(
   imageBase64: string,
   mimeType: string,
-  mealDetection: MealDetectionResult,
+  _mealDetection: MealDetectionResult,
   profile?: OnboardingProfile | null,
   onQuickResult?: (result: ScanResult) => void
 ): Promise<ScanResult> {
-  // Use existing vision product detection but with meal context
   const visionResult = await getProductInfoFromImage(imageBase64, mimeType);
   if (!visionResult.product_name) throw new ProductNotFoundError("photo");
 
-  // Continue with existing product photo flow...
   const visionNut = visionResult.nutrition;
   const servingG = visionResult.serving_size_g;
   
@@ -1374,7 +1966,18 @@ async function processProductPhotoScan(
     visionNutPer100g.calories = 2000;
   }
 
-  // Continue with existing product lookup and scoring logic...
+  const parsedVision = (() => {
+    const raw = visionResult.ingredients?.trim();
+    if (!raw) return undefined;
+    const split = splitIngredientsRespectingParens(raw);
+    return split.length > 0 ? split : [raw];
+  })();
+
+  const bestMatchProduct = await searchProductByName(
+    visionResult.product_name,
+    visionResult.brand ?? null,
+  );
+
   const visionOnlyProduct: ProductInfo = {
     name: visionResult.product_name,
     brand: visionResult.brand ?? "",
@@ -1386,40 +1989,87 @@ async function processProductPhotoScan(
     source: "openfoodfacts",
   };
 
-  const scoresVision = computeScores(visionOnlyProduct, profile);
-  
-  const parsedVision = (() => {
-    const raw = visionResult.ingredients?.trim();
-    if (!raw) return undefined;
+  const scoringProduct: ProductInfo = bestMatchProduct
+    ? {
+        ...bestMatchProduct,
+        ingredients: bestMatchProduct.ingredients || visionResult.ingredients || undefined,
+        nutrition:
+          Object.values(bestMatchProduct.nutrition ?? {}).some((v) => typeof v === "number")
+            ? bestMatchProduct.nutrition
+            : visionNutPer100g ?? bestMatchProduct.nutrition,
+      }
+    : visionOnlyProduct;
+
+  const scores = computeScores(scoringProduct, profile);
+
+  const parsedIngredients = (() => {
+    if (!scoringProduct.ingredients?.trim()) return parsedVision;
+    const raw = scoringProduct.ingredients.trim();
     const split = splitIngredientsRespectingParens(raw);
     return split.length > 0 ? split : [raw];
   })();
 
-  const quickResultVision: ScanResult = {
+  const baseResult: ScanResult = {
     scan_type: "photo",
-    food_name: visionResult.product_name,
-    product_name: visionResult.product_name,
-    manufacturer: visionResult.brand || undefined,
-    identified_foods: [visionResult.product_name],
-    gut_score: scoresVision.gut_score,
-    bloat_score: scoresVision.bloat_score,
-    skin_score: scoresVision.skin_score,
-    energy_score: scoresVision.energy_score,
-    digestion_score: scoresVision.digestion_score,
-    confidence: scoresVision.confidence,
-    analysis: { summary: `${visionResult.product_name}${visionResult.brand ? ` by ${visionResult.brand}` : ""}.`, tips: [] },
-    nutrition: visionNutPer100g || {},
-    image_url: undefined, // Will be set in calling function
-    ingredients: parsedVision || [],
-    isMeal: false, // Explicitly marked as product
+    food_name: scoringProduct.name,
+    product_name: scoringProduct.name,
+    manufacturer: scoringProduct.brand || undefined,
+    identified_foods: [scoringProduct.name],
+    gut_score: scores.gut_score,
+    bloat_score: scores.bloat_score,
+    skin_score: scores.skin_score,
+    energy_score: scores.energy_score,
+    digestion_score: scores.digestion_score,
+    confidence: scores.confidence,
+    analysis: {
+      summary: `${scoringProduct.name}${scoringProduct.brand ? ` by ${scoringProduct.brand}` : ""}.`,
+      tips: [],
+      serving_size_display:
+        scoringProduct.serving_size_display ?? visionResult.serving_size_display,
+      servings_per_container:
+        scoringProduct.servings_per_container ?? visionResult.servings_per_container,
+    },
+    nutrition: scoringProduct.nutrition ?? {},
+    image_url: scoringProduct.imageUrl,
+    barcode: scoringProduct.barcode || undefined,
+    ingredients: parsedIngredients ?? [],
+    isMeal: false,
   };
 
-  if (onQuickResult) onQuickResult(quickResultVision);
+  if (onQuickResult) onQuickResult(baseResult);
 
-  // Continue with database lookup and final analysis (existing logic)
-  // ... (rest of the existing product photo flow would continue here)
-  
-  return quickResultVision; // Simplified for now - will integrate full existing logic
+  let analysis: AnalysisText = {
+    summary: baseResult.analysis.summary,
+    tips: [],
+  };
+  try {
+    analysis = await generateAnalysisText(scoringProduct, scores, profile);
+  } catch (llmErr) {
+    const msg = llmErr instanceof Error ? llmErr.message : String(llmErr);
+    if (!isQuotaError(msg)) {
+      console.warn("[analyze-scan] Photo product LLM explanation failed, using defaults:", msg);
+    }
+  }
+
+  return {
+    ...baseResult,
+    analysis: {
+      summary: analysis.summary ?? baseResult.analysis.summary,
+      tips: analysis.tips ?? [],
+      skin: analysis.skin,
+      digestion: analysis.digestion,
+      mood: analysis.mood,
+      bloatDetails: analysis.bloatDetails,
+      impactDetails: analysis.impactDetails,
+      goalPrediction: analysis.goalPrediction,
+      personalizedInsights: analysis.personalizedInsights,
+      ingredientAnalysis: analysis.ingredientAnalysis,
+      serving_size_display:
+        baseResult.analysis.serving_size_display,
+      servings_per_container:
+        baseResult.analysis.servings_per_container,
+    },
+  };
 }
 
 /** Generate LLM analysis specifically for meals */
@@ -1502,6 +2152,7 @@ function normalizeResult(
       personalizedInsights: Array.isArray(partial.analysis?.personalizedInsights)
         ? (partial.analysis.personalizedInsights as ScanResult["analysis"]["personalizedInsights"])
         : undefined,
+      ingredientAnalysis: partial.analysis?.ingredientAnalysis as ScanResult["analysis"]["ingredientAnalysis"],
       improvementOptions: partial.analysis?.improvementOptions as ScanResult["analysis"]["improvementOptions"],
       timingInsights: partial.analysis?.timingInsights as ScanResult["analysis"]["timingInsights"],
       nutritionContext: partial.analysis?.nutritionContext as ScanResult["analysis"]["nutritionContext"],
@@ -1563,6 +2214,7 @@ export async function analyzeScan(
   request: AnalyzeScanRequest,
   profile?: OnboardingProfile | null,
   onQuickResult?: (result: ScanResult) => void,
+  onPhotoStageUpdate?: (update: PhotoAnalysisStageUpdate) => void,
 ): Promise<ScanResult> {
   let lastError: unknown;
 
@@ -1652,6 +2304,7 @@ export async function analyzeScan(
             impactDetails: analysis.impactDetails,
             goalPrediction: analysis.goalPrediction,
             personalizedInsights: analysis.personalizedInsights,
+            ingredientAnalysis: analysis.ingredientAnalysis,
             serving_size_display: product.serving_size_display,
             servings_per_container: product.servings_per_container,
           },
@@ -1680,13 +2333,28 @@ export async function analyzeScan(
         mimeType = ct.split(";")[0].trim();
       }
 
-      // ── Stage 1: Quick meal detection (1-2 seconds) ──
-      const mealDetection = await quickMealDetection(
-        imageBase64,
-        mimeType,
-        request.learnedPortionPriors
-      );
+      // ── Stage 1: Quick meal detection ──
+      onPhotoStageUpdate?.({ stage: "detect", progress: 10, message: "Scanning photo" });
+      let mealDetection: MealDetectionResult;
+      try {
+        mealDetection = await quickMealDetection(
+          imageBase64,
+          mimeType,
+          request.learnedPortionPriors,
+          request.visualPortionPriors,
+          request.cameraMetadata,
+          onPhotoStageUpdate,
+        );
+      } catch (quickDetectionErr) {
+        const msg = quickDetectionErr instanceof Error ? quickDetectionErr.message : String(quickDetectionErr);
+        if (!isQuotaError(msg)) {
+          console.warn("[photo-flow] Quick meal detection failed, using fallback meal result:", msg);
+        }
+        onPhotoStageUpdate?.({ stage: "analyze", progress: 38, message: "Continuing with fallback analysis" });
+        mealDetection = createFallbackMealDetection(buildLearnedPriorMap(request.learnedPortionPriors));
+      }
       const scanClassification = classifyScanType(mealDetection);
+      onPhotoStageUpdate?.({ stage: "validate", progress: 74, message: "Finalizing scan type" });
       
       console.log("[photo-flow] Classification:", {
         isMeal: mealDetection.isMeal,
@@ -1697,9 +2365,15 @@ export async function analyzeScan(
 
       // ── Stage 2: Process based on classification ──
       if (scanClassification === "meal") {
-        return await processMealScan(imageBase64, mimeType, mealDetection, profile, onQuickResult);
+        onPhotoStageUpdate?.({ stage: "portion", progress: 82, message: "Computing meal portions" });
+        const result = await processMealScan(imageBase64, mimeType, mealDetection, profile, onQuickResult);
+        onPhotoStageUpdate?.({ stage: "validate", progress: 96, message: "Preparing confirmation" });
+        return result;
       } else {
-        return await processProductPhotoScan(imageBase64, mimeType, mealDetection, profile, onQuickResult);
+        onPhotoStageUpdate?.({ stage: "analyze", progress: 84, message: "Analyzing product details" });
+        const result = await processProductPhotoScan(imageBase64, mimeType, mealDetection, profile, onQuickResult);
+        onPhotoStageUpdate?.({ stage: "validate", progress: 96, message: "Finishing analysis" });
+        return result;
       }
     } catch (e) {
       lastError = e;

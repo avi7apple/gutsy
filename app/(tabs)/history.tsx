@@ -7,7 +7,9 @@ import {
     Shadows,
     Spacing,
 } from "@/constants/theme";
+import { useAuthUserQuery } from "@/lib/hooks/use-auth-user-query";
 import { useGutScore } from "@/lib/hooks/use-gut-score-query";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { shouldRetryQuery } from "@/lib/network-errors";
 import { supabase } from "@/lib/supabase";
 import { capitalizeWords } from "@/lib/utils/text-formatting";
@@ -43,51 +45,75 @@ interface ScanItem {
   scan_type: "photo" | "barcode" | "manual";
 }
 
-async function fetchAllScans(): Promise<ScanItem[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+async function fetchAllScans(userId: string): Promise<ScanItem[]> {
+  if (!userId) return [];
 
-  const { data, error } = await supabase
-    .from("meal_scans")
-    .select("id, food_name, product_name, image_url, bloat_score, gut_score, created_at, scan_type, analysis")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("meal_scans")
+      .select("id, food_name, product_name, image_url, bloat_score, gut_score, created_at, scan_type, analysis")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(100); // Add reasonable limit for performance
 
-  if (error) throw error;
+    if (error) {
+      console.error("[History] Error fetching scans:", error);
+      throw error;
+    }
 
-  return (data || []).map((scan) => {
-    const gutScore =
-      scan.gut_score ??
-      (scan.analysis && typeof scan.analysis === "object"
-        ? (scan.analysis as any).gut_score ?? scan.bloat_score ?? null
-        : scan.bloat_score ?? null);
-    return { ...scan, gut_score: gutScore } as ScanItem;
-  });
+    console.log(`[History] Fetched ${data?.length || 0} scans for user ${userId}`);
+    return (data || []).map((scan) => {
+      const gutScore =
+        scan.gut_score ??
+        (scan.analysis && typeof scan.analysis === "object"
+          ? (scan.analysis as any).gut_score ?? scan.bloat_score ?? null
+          : scan.bloat_score ?? null);
+      return { ...scan, gut_score: gutScore } as ScanItem;
+    });
+  } catch (error) {
+    console.error("[History] Failed to fetch scans:", error);
+    throw error;
+  }
 }
 
 export default function HistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuthUserQuery();
   const { refetch: refetchGutScore } = useGutScore();
 
-  const { data: scans = [], isLoading, refetch: refetchScans } = useQuery({
-    queryKey: ["allScans"],
-    queryFn: fetchAllScans,
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 5,
+  const { data: scans = [], isLoading, error, refetch: refetchScans } = useQuery({
+    queryKey: ["allScans", user?.id ?? "anon"],
+    queryFn: () => fetchAllScans(user!.id),
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 15,
     retry: shouldRetryQuery,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
-    // Enable background refetching for real-time updates
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchOnMount: false,
+    refetchOnReconnect: true,
+    refetchInterval: 1000 * 60 * 3,
+    placeholderData: (previousData) => previousData,
   });
 
   useFocusEffect(
     React.useCallback(() => {
+      console.log("[History] Focus effect - refetching scans");
       refetchGutScore();
       refetchScans();
     }, [refetchGutScore, refetchScans])
   );
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log("[History] Scans data updated:", {
+      scansCount: scans.length,
+      isLoading,
+      error: error instanceof Error ? error.message : String(error),
+      userId: user?.id
+    });
+  }, [scans, isLoading, error, user?.id]);
+  
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "high" | "medium" | "low">("all");
@@ -118,17 +144,14 @@ export default function HistoryScreen() {
   }, [scans, searchQuery, filter]);
 
   const handleDeleteScan = useCallback(async (scanId: string) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user?.id) return;
     const { error } = await supabase
       .from("meal_scans")
       .delete()
       .eq("id", scanId)
       .eq("user_id", user.id);
     if (!error) refetchScans();
-  }, [refetchScans]);
+  }, [refetchScans, user?.id]);
 
   const scansByDate = useMemo(() => {
     const map = new Map<string, ScanItem[]>();
@@ -137,7 +160,16 @@ export default function HistoryScreen() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(scan);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => (a > b ? -1 : a < b ? 1 : 0));
+    return Array.from(map.entries())
+      .sort(([a], [b]) => (a > b ? -1 : a < b ? 1 : 0))
+      .map(([key, items]) => [
+        key,
+        [...items].sort((first, second) => {
+          const firstTs = new Date(first.created_at).getTime();
+          const secondTs = new Date(second.created_at).getTime();
+          return secondTs - firstTs;
+        }),
+      ] as [string, ScanItem[]]);
   }, [filteredScans]);
 
   async function handleRefresh() {
@@ -148,7 +180,9 @@ export default function HistoryScreen() {
 
   function getDateKey(dateString: string): string {
     const d = new Date(dateString);
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${month}-${day}`;
   }
 
   function getSectionLabel(dateString: string): string {
@@ -303,7 +337,21 @@ export default function HistoryScreen() {
           </View>
 
           {/* Scans List */}
-          {filteredScans.length === 0 ? (
+          {error ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="warning-outline" size={64} color={Colors.error} />
+              <Text style={styles.emptyStateText}>Error loading scans</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {error instanceof Error ? error.message : "Please try again"}
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyStateButton}
+                onPress={() => refetchScans()}
+              >
+                <Text style={styles.emptyStateButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredScans.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="list-outline" size={64} color={Colors.textMuted} />
               <Text style={styles.emptyStateText}>
@@ -382,13 +430,13 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.massive,
   },
   header: {
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.lg),
+    paddingBottom: rs(Spacing.md),
   },
   headerTitle: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 28,
+    fontSize: rf(28),
     color: Colors.text,
   },
   searchContainer: {
@@ -410,7 +458,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
     padding: 0,
   },
@@ -432,7 +480,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.text,
   },
   filterButtonTextActive: {
@@ -443,15 +491,15 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.massive,
   },
   deleteAction: {
-    width: 56,
+    width: rs(56),
     justifyContent: "center",
     alignItems: "center",
     marginBottom: Spacing.md,
   },
   deleteActionIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: rs(36),
+    height: rs(36),
+    borderRadius: rs(18),
     borderWidth: 1.5,
     borderColor: Colors.error,
     backgroundColor: Colors.surface,
@@ -463,7 +511,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     fontFamily: Fonts.sectionHeader,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
     marginBottom: Spacing.sm,
     marginTop: Spacing.xs,
@@ -480,14 +528,14 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
   },
   scanImage: {
-    width: 56,
-    height: 56,
+    width: rs(56),
+    height: rs(56),
     borderRadius: BorderRadius.sm,
     backgroundColor: Colors.borderLight,
   },
   scanImagePlaceholder: {
-    width: 56,
-    height: 56,
+    width: rs(56),
+    height: rs(56),
     borderRadius: BorderRadius.sm,
     backgroundColor: Colors.borderLight,
     justifyContent: "center",
@@ -499,7 +547,7 @@ const styles = StyleSheet.create({
   },
   scanFoodName: {
     fontFamily: Fonts.productName,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
@@ -509,12 +557,12 @@ const styles = StyleSheet.create({
   },
   scanDate: {
     fontFamily: Fonts.timestamp,
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
   },
   scanTime: {
     fontFamily: Fonts.timestamp,
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
   },
   scoreBadge: {
@@ -525,7 +573,7 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontFamily: Fonts.scoreNumber,
-    fontSize: 16,
+    fontSize: rf(16),
   },
   loadingContainer: {
     flex: 1,
@@ -540,15 +588,28 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 18,
+    fontSize: rf(18),
     color: Colors.text,
     marginTop: Spacing.lg,
     marginBottom: Spacing.xs,
   },
   emptyStateSubtext: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
+    textAlign: "center",
+  },
+  emptyStateButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.lg,
+  },
+  emptyStateButtonText: {
+    fontFamily: Fonts.body,
+    fontSize: rf(16),
+    color: "#FFFFFF",
     textAlign: "center",
   },
 });

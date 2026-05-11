@@ -1,7 +1,8 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Colors, Fonts } from "@/constants/theme";
 import { LiquidGlassTabBar } from "@/components/LiquidGlassTabBar";
+import { Colors, Fonts } from "@/constants/theme";
+import { rf } from "@/lib/hooks/use-responsive";
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
   return (
@@ -13,7 +14,7 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: {
           fontFamily: Fonts.tabBarLabel,
-          fontSize: 12,
+          fontSize: rf(12),
         },
       }}
     >
@@ -40,6 +41,7 @@ export default function TabsLayout() {
         options={{
           title: "Scan",
           tabBarStyle: { display: "none" },
+          sceneStyle: { backgroundColor: "#000000" },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="camera" size={size} color={color} />
           ),

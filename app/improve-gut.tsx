@@ -1,4 +1,5 @@
 import OnboardingButton from "@/components/onboarding/OnboardingButton";
+import ProgressBar from "@/components/onboarding/ProgressBar";
 import {
   BorderRadius,
   Colors,
@@ -6,6 +7,8 @@ import {
   Shadows,
   Spacing,
 } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect } from "react";
@@ -13,11 +16,9 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  View,
   TouchableOpacity,
+  View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import ProgressBar from "@/components/onboarding/ProgressBar";
 import Animated, {
   Easing,
   interpolate,
@@ -60,6 +61,13 @@ const STEPS = [
 export default function ImproveGutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
+
+  const scannerSize = isSmallScreen ? rs(SCANNER_SIZE * 0.85) : rs(SCANNER_SIZE);
+  const pulseSize = scannerSize + PULSE_RING_OFFSET * 2;
+  const scanLineWidth = scannerSize - rs(Spacing.lg);
 
   const headerOpacity = useSharedValue(0);
   const scannerOpacity = useSharedValue(0);
@@ -169,9 +177,9 @@ export default function ImproveGutScreen() {
     opacity: scannerOpacity.value,
   }));
   const scanLineStyle = useAnimatedStyle(() => {
-    const translated = interpolate(scanLineY.value, [0, 1], [0, SCANNER_SIZE]);
+    const translated = interpolate(scanLineY.value, [0, 1], [0, scannerSize]);
     return { transform: [{ translateY: translated }] };
-  });
+  }, [scannerSize]);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
   const card1Style = useAnimatedStyle(() => ({
     opacity: card1Opacity.value,
@@ -199,10 +207,16 @@ export default function ImproveGutScreen() {
       <View style={styles.blobTopRight} pointerEvents="none" />
       <View style={styles.blobBottomLeft} pointerEvents="none" />
 
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          isCompactScreen ? styles.headerCompact : undefined,
+          isSmallScreen ? styles.headerTight : undefined,
+        ]}
+      >
         <TouchableOpacity
           onPress={() => router.back()}
-          style={styles.backButton}
+          style={[styles.backButton, isSmallScreen ? styles.backButtonTight : undefined]}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="arrow-back" size={24} color="#2E2E2E" />
@@ -216,78 +230,194 @@ export default function ImproveGutScreen() {
         </View>
       </View>
 
-      <Animated.View style={[styles.headerZone, headerStyle]}>
-        <Text style={styles.zoneLabel}>IMPROVE YOUR GUT HEALTH</Text>
-        <Text style={styles.headline}>
+      <Animated.View
+        style={[
+          styles.headerZone,
+          isCompactScreen ? styles.headerZoneCompact : undefined,
+          isSmallScreen ? styles.headerZoneTight : undefined,
+          headerStyle,
+        ]}
+      >
+        <Text style={[styles.zoneLabel, isSmallScreen ? styles.zoneLabelTight : undefined]}>IMPROVE YOUR GUT HEALTH</Text>
+        <Text
+          style={[
+            styles.headline,
+            isCompactScreen ? styles.headlineCompact : undefined,
+            isSmallScreen ? styles.headlineTight : undefined,
+          ]}
+        >
           Your score is{"\n"}
           <Text style={styles.headlineItalic}>not fixed.</Text>
         </Text>
-        <Text style={styles.subtitle}>
+        <Text
+          style={[
+            styles.subtitle,
+            isCompactScreen ? styles.subtitleCompact : undefined,
+            isSmallScreen ? styles.subtitleTight : undefined,
+          ]}
+        >
           Every food choice either helps or hurts that number. {"You're"}{" "}
           about to see which is which, before you eat.
         </Text>
       </Animated.View>
 
-      <Animated.View style={[styles.scannerZone, scannerStyle]}>
-        <View style={styles.scannerOuter}>
-          <Animated.View style={[styles.pulseRing, pulseStyle]} />
-          <View style={styles.scannerSquare}>
+      <Animated.View
+        style={[
+          styles.scannerZone,
+          isCompactScreen ? styles.scannerZoneCompact : undefined,
+          isSmallScreen ? styles.scannerZoneTight : undefined,
+          scannerStyle,
+        ]}
+      >
+        <View style={[styles.scannerOuter, { width: pulseSize, height: pulseSize }]}>
+          <Animated.View style={[styles.pulseRing, { width: pulseSize, height: pulseSize }, pulseStyle]} />
+          <View
+            style={[
+              styles.scannerSquare,
+              { width: scannerSize, height: scannerSize },
+              !isSmallScreen ? { borderRadius: scannerSize / 6 } : undefined,
+            ]}
+          >
             <View style={styles.cornerBrackets}>
               <View style={[styles.bracket, styles.bracketTopLeft]} />
               <View style={[styles.bracket, styles.bracketTopRight]} />
               <View style={[styles.bracket, styles.bracketBottomLeft]} />
               <View style={[styles.bracket, styles.bracketBottomRight]} />
             </View>
-            <Animated.View style={[styles.scanLineWrap, scanLineStyle]}>
+            <Animated.View style={[styles.scanLineWrap, { width: scannerSize, height: scannerSize }, scanLineStyle]}>
               <LinearGradient
                 colors={["transparent", Colors.primary, "transparent"]}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
-                style={styles.scanLine}
+                style={[styles.scanLine, { width: scanLineWidth }]}
               />
             </Animated.View>
-            <Text style={styles.scannerIcon}>📦</Text>
+            <Text style={[styles.scannerIcon, isSmallScreen ? styles.scannerIconTight : undefined]}>📦</Text>
           </View>
         </View>
       </Animated.View>
 
-      <View style={styles.stepsZone}>
-        <Animated.View style={[styles.stepCard, card1Style]}>
-          <View style={styles.stepIconWrap}>
-            <Text style={styles.stepEmoji}>{STEPS[0].emoji}</Text>
+      <View
+        style={[
+          styles.stepsZone,
+          isCompactScreen ? styles.stepsZoneCompact : undefined,
+          isSmallScreen ? styles.stepsZoneTight : undefined,
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.stepCard,
+            isCompactScreen ? styles.stepCardCompact : undefined,
+            isSmallScreen ? styles.stepCardTight : undefined,
+            card1Style,
+          ]}
+        >
+          <View style={[styles.stepIconWrap, isSmallScreen ? styles.stepIconWrapTight : undefined]}>
+            <Text style={[styles.stepEmoji, isSmallScreen ? styles.stepEmojiTight : undefined]}>{STEPS[0].emoji}</Text>
           </View>
           <View style={styles.stepTextWrap}>
-            <Text style={styles.stepLabel}>{STEPS[0].label}</Text>
-            <Text style={styles.stepDescription}>{STEPS[0].description}</Text>
+            <Text
+              style={[
+                styles.stepLabel,
+                isCompactScreen ? styles.stepLabelCompact : undefined,
+                isSmallScreen ? styles.stepLabelTight : undefined,
+              ]}
+            >
+              {STEPS[0].label}
+            </Text>
+            <Text
+              style={[
+                styles.stepDescription,
+                isCompactScreen ? styles.stepDescriptionCompact : undefined,
+                isSmallScreen ? styles.stepDescriptionTight : undefined,
+              ]}
+            >
+              {STEPS[0].description}
+            </Text>
           </View>
         </Animated.View>
-        <Animated.View style={[styles.stepCard, card2Style]}>
-          <View style={styles.stepIconWrap}>
-            <Text style={styles.stepEmoji}>{STEPS[1].emoji}</Text>
+        <Animated.View
+          style={[
+            styles.stepCard,
+            isCompactScreen ? styles.stepCardCompact : undefined,
+            isSmallScreen ? styles.stepCardTight : undefined,
+            card2Style,
+          ]}
+        >
+          <View style={[styles.stepIconWrap, isSmallScreen ? styles.stepIconWrapTight : undefined]}>
+            <Text style={[styles.stepEmoji, isSmallScreen ? styles.stepEmojiTight : undefined]}>{STEPS[1].emoji}</Text>
           </View>
           <View style={styles.stepTextWrap}>
-            <Text style={styles.stepLabel}>{STEPS[1].label}</Text>
-            <Text style={styles.stepDescription}>{STEPS[1].description}</Text>
+            <Text
+              style={[
+                styles.stepLabel,
+                isCompactScreen ? styles.stepLabelCompact : undefined,
+                isSmallScreen ? styles.stepLabelTight : undefined,
+              ]}
+            >
+              {STEPS[1].label}
+            </Text>
+            <Text
+              style={[
+                styles.stepDescription,
+                isCompactScreen ? styles.stepDescriptionCompact : undefined,
+                isSmallScreen ? styles.stepDescriptionTight : undefined,
+              ]}
+            >
+              {STEPS[1].description}
+            </Text>
           </View>
         </Animated.View>
-        <Animated.View style={[styles.stepCard, card3Style]}>
-          <View style={styles.stepIconWrap}>
-            <Text style={styles.stepEmoji}>{STEPS[2].emoji}</Text>
+        <Animated.View
+          style={[
+            styles.stepCard,
+            isCompactScreen ? styles.stepCardCompact : undefined,
+            isSmallScreen ? styles.stepCardTight : undefined,
+            card3Style,
+          ]}
+        >
+          <View style={[styles.stepIconWrap, isSmallScreen ? styles.stepIconWrapTight : undefined]}>
+            <Text style={[styles.stepEmoji, isSmallScreen ? styles.stepEmojiTight : undefined]}>{STEPS[2].emoji}</Text>
           </View>
           <View style={styles.stepTextWrap}>
-            <Text style={styles.stepLabel}>{STEPS[2].label}</Text>
-            <Text style={styles.stepDescription}>{STEPS[2].description}</Text>
+            <Text
+              style={[
+                styles.stepLabel,
+                isCompactScreen ? styles.stepLabelCompact : undefined,
+                isSmallScreen ? styles.stepLabelTight : undefined,
+              ]}
+            >
+              {STEPS[2].label}
+            </Text>
+            <Text
+              style={[
+                styles.stepDescription,
+                isCompactScreen ? styles.stepDescriptionCompact : undefined,
+                isSmallScreen ? styles.stepDescriptionTight : undefined,
+              ]}
+            >
+              {STEPS[2].description}
+            </Text>
           </View>
         </Animated.View>
       </View>
 
-      <Animated.View style={[styles.bottomZone, ctaStyle]}>
+      <Animated.View
+        style={[
+          styles.bottomZone,
+          isCompactScreen ? styles.bottomZoneCompact : undefined,
+          isSmallScreen ? styles.bottomZoneTight : undefined,
+          ctaStyle,
+        ]}
+      >
         <OnboardingButton
           title="Personalize app for me →"
           onPress={() => router.push("/onboarding/goal")}
-          style={styles.ctaButton}
+          style={[styles.ctaButton, isSmallScreen ? styles.ctaButtonTight : undefined]}
+          labelStyle={isSmallScreen ? styles.ctaButtonLabelTight : undefined}
+          textStyle={isSmallScreen ? styles.ctaButtonLabelTight : undefined}
         />
-        <Text style={styles.caption}>
+        <Text style={[styles.caption, isSmallScreen ? styles.captionTight : undefined]}>
           Your gut health journey starts right now.
         </Text>
       </Animated.View>
@@ -303,17 +433,31 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.lg,
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.md),
+    paddingBottom: rs(Spacing.sm),
+    gap: rs(Spacing.lg),
+  },
+  headerCompact: {
+    paddingHorizontal: rs(Spacing.md + 2),
+    paddingBottom: rs(Spacing.xs),
+  },
+  headerTight: {
+    paddingHorizontal: rs(Spacing.md),
+    paddingTop: rs(Spacing.xs),
+    gap: rs(Spacing.md),
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     alignItems: "center",
     justifyContent: "center",
+  },
+  backButtonTight: {
+    width: rs(38),
+    height: rs(38),
+    borderRadius: rs(19),
   },
   progressWrapper: {
     flex: 1,
@@ -346,21 +490,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl,
     paddingBottom: Spacing.md,
   },
+  headerZoneCompact: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.sm,
+  },
+  headerZoneTight: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xs,
+  },
   zoneLabel: {
-    fontSize: 9,
+    fontSize: rf(9),
     fontWeight: "700",
     letterSpacing: 2,
     color: Colors.textSecondary,
     opacity: 0.9,
     marginBottom: Spacing.xs,
   },
+  zoneLabelTight: {
+    fontSize: rf(8),
+    letterSpacing: 1.5,
+    marginBottom: Spacing.xs / 2,
+  },
   headline: {
-    fontSize: 27,
+    fontSize: rf(27),
     fontWeight: "600",
     color: Colors.text,
-    lineHeight: 34,
+    lineHeight: rf(34),
     textAlign: "center",
     marginBottom: Spacing.xs,
+  },
+  headlineCompact: {
+    fontSize: rf(24),
+    lineHeight: rf(30),
+  },
+  headlineTight: {
+    fontSize: rf(22),
+    lineHeight: rf(28),
   },
   headlineItalic: {
     fontStyle: "italic",
@@ -368,19 +534,34 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: "400",
     color: Colors.text,
     opacity: 0.75,
-    lineHeight: 22,
+    lineHeight: rf(22),
     textAlign: "center",
-    maxWidth: 300,
+    maxWidth: rs(300),
+  },
+  subtitleCompact: {
+    fontSize: rf(15),
+    lineHeight: rf(20),
+  },
+  subtitleTight: {
+    fontSize: rf(13),
+    lineHeight: rf(18),
+    maxWidth: rs(280),
   },
   scannerZone: {
     flex: 0,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: Spacing.md,
+  },
+  scannerZoneCompact: {
+    paddingVertical: Spacing.sm,
+  },
+  scannerZoneTight: {
+    paddingVertical: Spacing.sm * 2,
   },
   scannerOuter: {
     width: SCANNER_SIZE + PULSE_RING_OFFSET * 2,
@@ -457,7 +638,10 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   scannerIcon: {
-    fontSize: 36,
+    fontSize: rf(36),
+  },
+  scannerIconTight: {
+    fontSize: rf(30),
   },
   stepsZone: {
     flex: 1,
@@ -466,6 +650,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl,
     paddingVertical: Spacing.md,
     gap: Spacing.md,
+  },
+  stepsZoneCompact: {
+    paddingHorizontal: Spacing.xl,
+  },
+  stepsZoneTight: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   stepCard: {
     flexDirection: "row",
@@ -477,32 +669,62 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
   },
+  stepCardCompact: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
+  stepCardTight: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
   stepIconWrap: {
-    width: 36,
-    height: 36,
+    width: rs(36),
+    height: rs(36),
     borderRadius: BorderRadius.sm,
     backgroundColor: `${Colors.primary}18`,
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
   },
+  stepIconWrapTight: {
+    width: rs(30),
+    height: rs(30),
+    marginRight: Spacing.sm,
+  },
   stepEmoji: {
-    fontSize: 18,
+    fontSize: rf(18),
+  },
+  stepEmojiTight: {
+    fontSize: rf(16),
   },
   stepTextWrap: {
     flex: 1,
   },
   stepLabel: {
-    fontSize: 14,
+    fontSize: rf(14),
     fontWeight: "700",
     color: Colors.text,
     marginBottom: 1,
   },
+  stepLabelCompact: {
+    fontSize: rf(13),
+  },
+  stepLabelTight: {
+    fontSize: rf(11.5),
+  },
   stepDescription: {
-    fontSize: 12,
+    fontSize: rf(12),
     fontWeight: "400",
     color: Colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: rf(16),
+  },
+  stepDescriptionCompact: {
+    fontSize: rf(11.5),
+  },
+  stepDescriptionTight: {
+    fontSize: rf(10),
+    lineHeight: rf(13),
   },
   bottomZone: {
     flex: 0,
@@ -511,15 +733,33 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     alignItems: "center",
   },
+  bottomZoneCompact: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+  },
+  bottomZoneTight: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
   ctaButton: {
     width: "100%",
     marginBottom: Spacing.sm,
     ...Shadows.md,
   },
+  ctaButtonTight: {
+    marginBottom: Spacing.xs,
+  },
+  ctaButtonLabelTight: {
+    fontSize: rf(13),
+  },
   caption: {
-    fontSize: 11,
+    fontSize: rf(11),
     color: Colors.textSecondary,
     opacity: 0.8,
     textAlign: "center",
+  },
+  captionTight: {
+    fontSize: rf(10),
   },
 });

@@ -1,36 +1,48 @@
 import {
-  BorderRadius,
-  Colors,
-  Fonts,
-  OnboardingButtonBar,
-  Shadows,
-  Spacing,
+    BorderRadius,
+    Colors,
+    Fonts,
+    Shadows,
 } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSequence,
-  withTiming,
+    interpolate,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSequence,
+    withTiming,
 } from "react-native-reanimated";
 
-const NODE_ROW_HEIGHT = 110;
-const TRACK_HEIGHT = NODE_ROW_HEIGHT * 2; // from first center to third center
-const NODE_CIRCLE_SIZE = 56;
+// ─── Scaling system ────────────────────────────────────────────────────────────
+// Design baseline: iPhone 14 Pro Max (430pt width).
+// All values scale linearly with screen width so the layout looks identical
+// on every device — just proportionally smaller on narrower screens.
+const { width: SCREEN_W } = Dimensions.get("window");
+const BASE_W = 430;
+const SCALE = Math.min(SCREEN_W / BASE_W, 1);
+
+/** Scale a spacing/size value */
+const s = (v: number) => Math.round(v * SCALE);
+/** Scale a font size */
+const f = (v: number) => Math.round(v * SCALE);
+
+// ─── Design tokens (at 430px baseline) ────────────────────────────────────────
+const NODE_ROW_HEIGHT = s(100);
+const NODE_CIRCLE_SIZE = s(50);
+const TRACK_HEIGHT = NODE_ROW_HEIGHT * 2;
 const FILL_DURATION = 400;
 const FILL_PAUSE = 400;
 
@@ -71,14 +83,14 @@ const PLANS: { id: PlanId; name: string; price: string; caption: string }[] = [
   {
     id: "weekly",
     name: "Weekly",
-    price: "$5.99/week",
-    caption: "Then $5.99/week.",
+    price: "$9.99/week",
+    caption: "Then $9.99/week.",
   },
   {
     id: "yearly",
     name: "Yearly",
-    price: "$0.77/week",
-    caption: "3 days free, then $39.99 per year ($0.77/week)",
+    price: "$0.96/week",
+    caption: "3 days free, then $49.99 per year ($0.96/week)",
   },
 ];
 
@@ -158,7 +170,7 @@ export default function TrialTimelineScreen() {
   const handleRestore = () => {
     /* TODO */
   };
-  const handleStartTrial = () => router.replace("/(tabs)" as any);
+  const handleStartTrial = () => router.push("/create-account");
 
   const selectedCaption =
     PLANS.find((p) => p.id === selectedPlan)?.caption ?? PLANS[1].caption;
@@ -166,10 +178,7 @@ export default function TrialTimelineScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.content}>
         {/* Nav */}
         <View style={styles.nav}>
           <TouchableOpacity
@@ -177,7 +186,7 @@ export default function TrialTimelineScreen() {
             style={styles.navBtn}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={s(24)} color={Colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleRestore}
@@ -203,18 +212,37 @@ export default function TrialTimelineScreen() {
         {/* Timeline (shown only when Yearly is selected) */}
         {selectedPlan === "yearly" && (
           <View style={styles.timelineSection}>
-            <View style={styles.timelineTrackBg} />
-            <Animated.View style={[styles.timelineFillWrap, fillHeightStyle]}>
-              <LinearGradient
-                colors={[
-                  Colors.primary,
-                  `${Colors.primary}40`,
-                  `${Colors.primary}15`,
-                ]}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
             <View style={styles.nodesColumn}>
+              <View
+                style={[
+                  styles.timelineTrackBg,
+                  {
+                    left: NODE_CIRCLE_SIZE / 2 - s(2),
+                    top: NODE_ROW_HEIGHT / 2,
+                    height: TRACK_HEIGHT,
+                  },
+                ]}
+              />
+              <Animated.View
+                style={[
+                  styles.timelineFillWrap,
+                  {
+                    left: NODE_CIRCLE_SIZE / 2 - s(2),
+                    top: NODE_ROW_HEIGHT / 2,
+                    height: TRACK_HEIGHT,
+                  },
+                  fillHeightStyle,
+                ]}
+              >
+                <LinearGradient
+                  colors={[
+                    Colors.primary,
+                    `${Colors.primary}40`,
+                    `${Colors.primary}15`,
+                  ]}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
               {[0, 1, 2].map((i) => (
                 <View key={i} style={styles.nodeRow}>
                   <Animated.View
@@ -276,7 +304,7 @@ export default function TrialTimelineScreen() {
           </View>
         )}
 
-        {/* Plan selector - sits just above bottom zone */}
+        {/* Plan selector */}
         <View style={styles.planRow}>
           <View style={styles.planCardContainer}>
             <TouchableOpacity
@@ -289,7 +317,7 @@ export default function TrialTimelineScreen() {
             >
               <View style={styles.planCardContent}>
                 <Text style={styles.planName}>Weekly</Text>
-                <Text style={styles.planPrice}>$5.99/week</Text>
+                <Text style={styles.planPrice}>$9.99/week</Text>
               </View>
               <View
                 style={[
@@ -298,7 +326,7 @@ export default function TrialTimelineScreen() {
                 ]}
               >
                 {selectedPlan === "weekly" && (
-                  <Ionicons name="checkmark" size={14} color="#FFF" />
+                  <Ionicons name="checkmark" size={s(14)} color="#FFF" />
                 )}
               </View>
             </TouchableOpacity>
@@ -318,7 +346,7 @@ export default function TrialTimelineScreen() {
             >
               <View style={styles.planCardContent}>
                 <Text style={styles.planName}>Yearly</Text>
-                <Text style={styles.planPrice}>$0.77/week</Text>
+                <Text style={styles.planPrice}>$0.96/week</Text>
               </View>
               <View
                 style={[
@@ -327,15 +355,15 @@ export default function TrialTimelineScreen() {
                 ]}
               >
                 {selectedPlan === "yearly" && (
-                  <Ionicons name="checkmark" size={14} color="#FFF" />
+                  <Ionicons name="checkmark" size={s(14)} color="#FFF" />
                 )}
               </View>
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </View>
 
-      {/* Bottom button bar (outside ScrollView, like onboarding) */}
+      {/* Bottom button bar */}
       <View style={styles.bottomZone}>
         <Text style={styles.noPayment}>✓ No Payment Due Now.</Text>
         <TouchableOpacity
@@ -355,37 +383,41 @@ export default function TrialTimelineScreen() {
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────────────────────────
+// Every value uses s() or f() so it scales proportionally with screen width.
+// No breakpoints, no conditional styles — identical visual at every size.
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.lg,
-    paddingBottom: 0,
+  content: {
+    flex: 1,
+    paddingHorizontal: s(24),
+    paddingTop: s(8),
   },
   nav: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.xxl,
+    marginBottom: s(16),
   },
-  navBtn: { padding: Spacing.sm },
+  navBtn: {
+    padding: s(8),
+  },
   restoreText: {
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: f(15),
     color: Colors.textMuted,
   },
   headlineWrap: {
     alignItems: "center",
-    marginBottom: Spacing.xxxl,
+    marginBottom: s(20),
   },
   headline: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 24,
-    lineHeight: 32,
+    fontSize: f(22),
+    lineHeight: f(30),
     color: Colors.text,
     textAlign: "center",
   },
@@ -394,18 +426,20 @@ const styles = StyleSheet.create({
   },
   timelineSection: {
     position: "relative",
-    marginBottom: Spacing.xxxl,
-    paddingLeft: 0,
+    flex: 1,
+    justifyContent: "center",
+    marginBottom: s(16),
   },
   featureListSection: {
-    marginBottom: Spacing.xxxl,
+    flex: 1,
+    marginBottom: s(16),
   },
   featureListHeading: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 24,
-    lineHeight: 32,
+    fontSize: f(22),
+    lineHeight: f(30),
     color: Colors.text,
-    marginBottom: Spacing.xxxl,
+    marginBottom: s(24),
     textAlign: "center",
   },
   featureItemsContainer: {
@@ -414,47 +448,40 @@ const styles = StyleSheet.create({
   featureItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: Spacing.xxl,
-    marginTop: Spacing.sm,
+    marginBottom: s(18),
   },
   featureCheck: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 16,
+    fontSize: f(16),
     color: Colors.text,
-    marginRight: Spacing.md,
-    marginTop: 8,
+    marginRight: s(12),
+    marginTop: s(4),
   },
   featureTextBlock: {
     flex: 1,
   },
   featureTitle: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 17,
+    fontSize: f(16),
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: s(2),
   },
   featureDescription: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: f(14),
     color: Colors.textSecondary,
-    lineHeight: 22,
+    lineHeight: f(20),
   },
   timelineTrackBg: {
     position: "absolute",
-    left: NODE_CIRCLE_SIZE / 2 - 2,
-    top: NODE_ROW_HEIGHT / 2,
-    width: 4,
-    height: TRACK_HEIGHT,
-    borderRadius: 2,
+    width: s(4),
+    borderRadius: s(2),
     backgroundColor: `${Colors.text}12`,
   },
   timelineFillWrap: {
     position: "absolute",
-    left: NODE_CIRCLE_SIZE / 2 - 2,
-    top: NODE_ROW_HEIGHT / 2,
-    width: 4,
-    height: TRACK_HEIGHT,
-    borderRadius: 2,
+    width: s(4),
+    borderRadius: s(2),
     overflow: "hidden",
     justifyContent: "flex-end",
   },
@@ -464,7 +491,7 @@ const styles = StyleSheet.create({
   nodeRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: NODE_ROW_HEIGHT,
+    height: NODE_ROW_HEIGHT,
   },
   nodeCircleWrap: {
     width: NODE_CIRCLE_SIZE,
@@ -491,52 +518,52 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   nodeEmoji: {
-    fontSize: 28,
+    fontSize: f(24),
   },
   nodeTextBlock: {
     flex: 1,
-    marginLeft: Spacing.lg,
+    marginLeft: s(14),
     justifyContent: "center",
   },
   nodeLabel: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 17,
+    fontSize: f(16),
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: s(2),
   },
   nodeDescription: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: f(13),
     color: Colors.textMuted,
-    lineHeight: 22,
+    lineHeight: f(18),
   },
   planRow: {
     flexDirection: "row",
-    gap: Spacing.lg,
+    gap: s(12),
     marginTop: "auto",
-    marginBottom: 0,
+    paddingTop: s(12),
     alignItems: "flex-start",
   },
   planCardContainer: {
     flex: 1,
     position: "relative",
     minWidth: 0,
-    maxWidth: "50%",
   },
   yearlyBadge: {
     position: "absolute",
-    top: -10,
+    top: s(-10),
+    alignSelf: "center",
     left: "50%",
-    marginLeft: -52,
+    marginLeft: s(-46),
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: s(8),
+    paddingVertical: s(3),
     borderRadius: BorderRadius.sm,
     zIndex: 1,
   },
   yearlyBadgeText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 10,
+    fontSize: f(9),
     color: "#FFFFFF",
     letterSpacing: 0.5,
   },
@@ -545,15 +572,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
+    paddingVertical: s(14),
+    paddingHorizontal: s(14),
     borderRadius: BorderRadius.lg,
     backgroundColor: Colors.backgroundWhite,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    height: 88,
-    minHeight: 88,
-    maxHeight: 88,
   },
   planCardSelected: {
     borderColor: Colors.primary,
@@ -562,19 +586,19 @@ const styles = StyleSheet.create({
   planCardContent: {},
   planName: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 16,
+    fontSize: f(14),
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: s(2),
   },
   planPrice: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 17,
+    fontSize: f(15),
     color: Colors.text,
   },
   radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: s(20),
+    height: s(20),
+    borderRadius: s(10),
     borderWidth: 2,
     borderColor: Colors.border,
     alignItems: "center",
@@ -585,22 +609,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   bottomZone: {
-    paddingHorizontal: OnboardingButtonBar.paddingHorizontal,
-    paddingTop: 0,
-    paddingBottom: OnboardingButtonBar.paddingBottom,
+    paddingHorizontal: s(24),
+    paddingBottom: s(24),
     alignItems: "center",
   },
   noPayment: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: f(14),
     color: Colors.textMuted,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.lg,
+    marginTop: s(12),
+    marginBottom: s(12),
   },
   primaryBtn: {
     backgroundColor: Colors.primary,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xxxl,
+    paddingVertical: s(16),
+    paddingHorizontal: s(32),
     borderRadius: BorderRadius.lg,
     width: "100%",
     alignItems: "center",
@@ -608,13 +631,13 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 18,
+    fontSize: f(17),
     color: "#FFFFFF",
   },
   pricing: {
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: f(11),
     color: Colors.textMuted,
-    marginTop: Spacing.xl,
+    marginTop: s(12),
   },
 });

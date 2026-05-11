@@ -1,4 +1,5 @@
 import { BorderRadius, Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -169,9 +170,9 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: rs(36),
+    height: rs(36),
+    borderRadius: rs(18),
     backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 28,
+    fontSize: rf(28),
     color: Colors.text,
   },
   content: {
@@ -199,20 +200,20 @@ const styles = StyleSheet.create({
   },
   introTitle: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 20,
+    fontSize: rf(20),
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
   introText: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
-    lineHeight: 21,
+    lineHeight: rf(21),
     marginBottom: Spacing.md,
   },
   lastUpdated: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textMuted,
   },
   sectionCard: {
@@ -226,15 +227,15 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: Fonts.sectionHeader,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
   sectionBody: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
-    lineHeight: 21,
+    lineHeight: rf(21),
     marginBottom: Spacing.sm,
   },
 });

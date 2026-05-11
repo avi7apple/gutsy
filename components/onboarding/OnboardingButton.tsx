@@ -1,13 +1,14 @@
+import { BorderRadius, Colors, Typography } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import React from "react";
 import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ViewStyle,
-  TextStyle,
-  ActivityIndicator,
+    ActivityIndicator,
+    StyleSheet,
+    Text,
+    TextStyle,
+    TouchableOpacity,
+    ViewStyle,
 } from "react-native";
-import { Colors, Typography, BorderRadius } from "@/constants/theme";
 
 interface OnboardingButtonProps {
   title: string;
@@ -69,11 +70,11 @@ export default function OnboardingButton({
 
 const styles = StyleSheet.create({
   base: {
-    height: 56,
-    borderRadius: BorderRadius.md,
+    height: rs(56),
+    borderRadius: rs(BorderRadius.md),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: rs(24),
   },
   primary: {
     backgroundColor: "#325C3A",
@@ -92,7 +93,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   label: {
-    ...Typography.button,
+    fontFamily: Typography.button.fontFamily,
+    fontSize: rf(Typography.button.fontSize),
+    lineHeight: rf(Typography.button.lineHeight),
   },
   primaryLabel: {
     color: "#FFFFFF",
@@ -102,7 +105,7 @@ const styles = StyleSheet.create({
   },
   textLabel: {
     color: Colors.primary,
-    fontSize: 15,
+    fontSize: rf(15),
     fontWeight: "500",
   },
   disabledLabel: {

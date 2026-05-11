@@ -8,16 +8,17 @@
  *   Phase 2: Secondary variants + fallback sources — only if Phase 1 fails
  */
 
-// Per-request timeout — long enough for slow mobile networks and OFF server latency
-const LOOKUP_TIMEOUT_MS = 18_000; // 18 seconds (was 9) — OFF often responds after 9s on slow connections
+// Per-request timeout - aggressive for fast user experience
+const LOOKUP_TIMEOUT_MS = 4_000; // 4 seconds (was 18) - fast fail for better UX
+const SECONDARY_TIMEOUT_MS = 6_000; // 6 seconds total for secondary lookups
 
 // ---------------------------------------------------------------------------
 // In-memory product cache — avoids redundant API calls for the same barcode
 // Longer TTL and larger size reduce repeated hits to OFF and 429 rate limits.
 // ---------------------------------------------------------------------------
 const _productCache = new Map<string, { product: ProductInfo; ts: number }>();
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes (was 5) — fewer lookups after "some time"
-const MAX_CACHE_SIZE = 100; // was 50 — keep more products cached during a session
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes (was 15) - better cache hit rate
+const MAX_CACHE_SIZE = 200; // was 100 - keep more products cached during a session
 
 function getCached(barcode: string): ProductInfo | undefined {
   const entry = _productCache.get(barcode);
@@ -66,6 +67,18 @@ function isRateLimited(source: string): boolean {
 
 function markRateLimited(source: string): void {
   _rateLimitedUntil[source] = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+}
+
+/** Create a timeout promise that rejects after specified time */
+function createTimeout(timeoutMs: number): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+  });
+}
+
+/** Race a promise against a timeout */
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([promise, createTimeout(timeoutMs)]);
 }
 
 /** fetch() with an AbortController timeout so no single request blocks >10s */
@@ -153,6 +166,73 @@ function hasEnoughInfo(p: ProductInfo): boolean {
   // Accept any result from known databases as long as it has a name
   if (hasName) return true;
   return false;
+}
+
+function splitIngredientTokens(raw?: string): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(/[;,\n]/g)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function normalizeIngredientToken(token: string): string {
+  return token
+    .toLowerCase()
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b(and|or)\b/g, " ")
+    .replace(/[^a-z0-9%\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mergeIngredientLists(primary?: string, secondary?: string): string | undefined {
+  const combined = [...splitIngredientTokens(primary), ...splitIngredientTokens(secondary)];
+  if (combined.length === 0) return undefined;
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const token of combined) {
+    const norm = normalizeIngredientToken(token);
+    if (!norm) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(token);
+  }
+
+  return out.length ? out.join(", ") : undefined;
+}
+
+function mergeNutrition(
+  primary: ProductInfo["nutrition"],
+  secondary: ProductInfo["nutrition"],
+): ProductInfo["nutrition"] {
+  return {
+    calories: primary.calories ?? secondary.calories,
+    protein_g: primary.protein_g ?? secondary.protein_g,
+    carbs_g: primary.carbs_g ?? secondary.carbs_g,
+    fat_g: primary.fat_g ?? secondary.fat_g,
+    fiber_g: primary.fiber_g ?? secondary.fiber_g,
+    sugar_g: primary.sugar_g ?? secondary.sugar_g,
+    sodium_mg: primary.sodium_mg ?? secondary.sodium_mg,
+    saturated_fat_g: primary.saturated_fat_g ?? secondary.saturated_fat_g,
+  };
+}
+
+function enrichProduct(primary: ProductInfo, secondary?: ProductInfo | null): ProductInfo {
+  if (!secondary) return primary;
+
+  const mergedIngredients = mergeIngredientLists(primary.ingredients, secondary.ingredients);
+  return {
+    ...primary,
+    brand: primary.brand || secondary.brand,
+    imageUrl: primary.imageUrl || secondary.imageUrl,
+    ingredients: mergedIngredients,
+    categories: primary.categories || secondary.categories,
+    serving_size_display: primary.serving_size_display ?? secondary.serving_size_display,
+    servings_per_container: primary.servings_per_container ?? secondary.servings_per_container,
+    nutrition: mergeNutrition(primary.nutrition ?? {}, secondary.nutrition ?? {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -942,18 +1022,29 @@ export async function lookupProduct(barcode: string): Promise<ProductInfo | null
     return { ...cached };
   }
 
-  // ── Phase 1: return as soon as first source has a result (don't wait for both) ─
-  const offPromise = lookupOpenFoodFacts(variants[0]).catch((e) => {
-    console.warn("[lookup] OFF error for", variants[0], ":", e instanceof Error ? e.message : String(e));
-    return null;
-  });
-  const usdaPromise = lookupUsdaFdc(variants[0]).catch((e) => {
-    console.warn("[lookup] USDA error for", variants[0], ":", e instanceof Error ? e.message : String(e));
-    return null;
-  });
+  // ── Phase 1: Parallel lookup with aggressive timeout (4s total) ─
+  const startTime = Date.now();
+  
+  // Run both lookups in parallel with individual timeouts
+  const phase1Promise = firstSuccessOrAll([
+    withTimeout(lookupOpenFoodFacts(variants[0]), LOOKUP_TIMEOUT_MS).catch((e) => {
+      console.warn("[lookup] OFF error for", variants[0], ":", e instanceof Error ? e.message : String(e));
+      return null;
+    }),
+    withTimeout(lookupUsdaFdc(variants[0]), LOOKUP_TIMEOUT_MS).catch((e) => {
+      console.warn("[lookup] USDA error for", variants[0], ":", e instanceof Error ? e.message : String(e));
+      return null;
+    })
+  ]);
 
-  const phase1 = await firstSuccessOrAll([offPromise, usdaPromise]);
-  console.log("[lookup] phase1 results:", phase1.map((r) => r ? `${r.source}:${r.name}` : "null"));
+  // Add overall timeout for Phase 1
+  const phase1: (ProductInfo | null)[] = await Promise.race([
+    phase1Promise,
+    createTimeout(LOOKUP_TIMEOUT_MS).then(() => [])
+  ]).catch(() => []);
+  
+  const phase1Time = Date.now() - startTime;
+  console.log(`[lookup] phase1 completed in ${phase1Time}ms:`, phase1.map((r) => r ? `${r.source}:${r.name}` : "null"));
   diag("phase1 done", {
     barcode: canonicalBarcode,
     off: phase1[0] ? "ok" : "null",
@@ -963,39 +1054,63 @@ export async function lookupProduct(barcode: string): Promise<ProductInfo | null
 
   let found = pickBest(phase1);
   if (found) {
-    found.barcode = canonicalBarcode;
-    setCache(canonicalBarcode, found);
-    return found;
+    const offCandidate = phase1.find((p) => p?.source === "openfoodfacts") ?? null;
+    const usdaCandidate = phase1.find((p) => p?.source === "usda") ?? null;
+    const enriched =
+      found.source === "openfoodfacts"
+        ? enrichProduct(found, usdaCandidate)
+        : found.source === "usda"
+          ? enrichProduct(found, offCandidate)
+          : found;
+    enriched.barcode = canonicalBarcode;
+    setCache(canonicalBarcode, enriched);
+    return enriched;
   }
 
-  // ── Phase 2: secondary variants + fallback sources (≤ 4 requests) ────
+  // ── Phase 2: secondary variants + fallback sources with 6s total timeout ────
   const phase2Tasks: Promise<ProductInfo | null>[] = [];
+  const phase2StartTime = Date.now();
 
-  // Try secondary variants with primary sources
+  // Try secondary variants with primary sources (shorter timeout)
   for (let v = 1; v < variants.length; v++) {
-    phase2Tasks.push(lookupOpenFoodFacts(variants[v]).catch((e) => {
-      console.warn("[lookup] OFF error for variant", variants[v], ":", e instanceof Error ? e.message : String(e));
-      return null;
-    }));
-    phase2Tasks.push(lookupUsdaFdc(variants[v]).catch((e) => {
-      console.warn("[lookup] USDA error for variant", variants[v], ":", e instanceof Error ? e.message : String(e));
-      return null;
-    }));
+    phase2Tasks.push(
+      withTimeout(lookupOpenFoodFacts(variants[v]), LOOKUP_TIMEOUT_MS).catch((e) => {
+        console.warn("[lookup] OFF error for variant", variants[v], ":", e instanceof Error ? e.message : String(e));
+        return null;
+      })
+    );
+    phase2Tasks.push(
+      withTimeout(lookupUsdaFdc(variants[v]), LOOKUP_TIMEOUT_MS).catch((e) => {
+        console.warn("[lookup] USDA error for variant", variants[v], ":", e instanceof Error ? e.message : String(e));
+        return null;
+      })
+    );
   }
 
   // Try fallback sources with primary variant only (conserve rate limits)
-  phase2Tasks.push(lookupUpcItemDb(variants[0]).catch((e) => {
-    console.warn("[lookup] UPCItemDB error:", e instanceof Error ? e.message : String(e));
-    return null;
-  }));
-  phase2Tasks.push(lookupBarcodeLookup(variants[0]).catch((e) => {
-    console.warn("[lookup] BarcodeLookup error:", e instanceof Error ? e.message : String(e));
-    return null;
-  }));
+  phase2Tasks.push(
+    withTimeout(lookupUpcItemDb(variants[0]), LOOKUP_TIMEOUT_MS).catch((e) => {
+      console.warn("[lookup] UPCItemDB error:", e instanceof Error ? e.message : String(e));
+      return null;
+    })
+  );
+  phase2Tasks.push(
+    withTimeout(lookupBarcodeLookup(variants[0]), LOOKUP_TIMEOUT_MS).catch((e) => {
+      console.warn("[lookup] BarcodeLookup error:", e instanceof Error ? e.message : String(e));
+      return null;
+    })
+  );
 
   if (phase2Tasks.length > 0) {
-    const phase2 = await Promise.all(phase2Tasks);
-    console.log("[lookup] phase2 results:", phase2.map((r) => r ? `${r.source}:${r.name}` : "null"));
+    // Race all phase2 tasks against total timeout
+    const phase2: (ProductInfo | null)[] = await Promise.race([
+      Promise.all(phase2Tasks),
+      createTimeout(SECONDARY_TIMEOUT_MS).then(() => [])
+    ]).catch(() => []);
+    
+    const phase2Time = Date.now() - phase2StartTime;
+    console.log(`[lookup] phase2 completed in ${phase2Time}ms:`, phase2.map((r: ProductInfo | null) => r ? `${r.source}:${r.name}` : "null"));
+    
     found = pickBest(phase2);
     diag("phase2 done", {
       barcode: canonicalBarcode,
@@ -1003,17 +1118,16 @@ export async function lookupProduct(barcode: string): Promise<ProductInfo | null
       found: !!found,
     });
     if (found) {
-      found.barcode = canonicalBarcode;
-      setCache(canonicalBarcode, found);
-      return found;
+      const secondary = phase2.find((p) => p && p.source !== found!.source) ?? null;
+      const enriched = enrichProduct(found, secondary);
+      enriched.barcode = canonicalBarcode;
+      setCache(canonicalBarcode, enriched);
+      return enriched;
     }
   }
 
-  diag("lookup failed", {
-    barcode: canonicalBarcode,
-    phase1BothNull: phase1.every((r) => r == null),
-  });
-  console.warn("[lookup] product not found for barcode:", canonicalBarcode);
+  const totalTime = Date.now() - startTime;
+  console.warn(`[lookup] product not found for barcode: ${canonicalBarcode} (total time: ${totalTime}ms)`);
   return null;
 }
 

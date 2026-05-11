@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
+import { rf } from '@/lib/hooks/use-responsive';
+import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface StreakDisplayProps {
   currentStreak: number;
@@ -14,19 +15,19 @@ export function StreakDisplay({ currentStreak, size = 'medium' }: StreakDisplayP
       case 'small':
         return {
           container: { padding: Spacing.sm, gap: Spacing.xs },
-          text: { fontSize: 12 },
+          text: { fontSize: rf(12) },
           icon: { size: 14 }
         };
       case 'large':
         return {
           container: { padding: Spacing.lg, gap: Spacing.sm },
-          text: { fontSize: 18 },
+          text: { fontSize: rf(18) },
           icon: { size: 24 }
         };
       default:
         return {
           container: { padding: Spacing.md, gap: Spacing.sm },
-          text: { fontSize: 14 },
+          text: { fontSize: rf(14) },
           icon: { size: 16 }
         };
     }

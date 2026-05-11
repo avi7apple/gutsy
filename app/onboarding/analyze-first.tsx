@@ -1,24 +1,26 @@
+import OnboardingButton from "@/components/onboarding/OnboardingButton";
+import { Colors, ROnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
 import React, { useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  StatusBar,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withSpring,
-  Easing,
+    Easing,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
-import OnboardingButton from "@/components/onboarding/OnboardingButton";
-import { Spacing, Colors, OnboardingButtonBar, Shadows } from "@/constants/theme";
 
 const SYSTEM_CARDS = [
   { emoji: "🌱", title: "Gut Microbiome", subtitle: "Trillions of bacteria process every bite you take." },
@@ -27,15 +29,18 @@ const SYSTEM_CARDS = [
   { emoji: "⚡", title: "Energy & Focus", subtitle: "Your gut produces 90% of your serotonin and powers your brain." },
 ];
 
-const TITLE_DURATION = 500;
-const SUBTITLE_DELAY = 200;
-const SUBTITLE_DURATION = 450;
-const CARD_STAGGER = 180;
-const CARD_DURATION = 450;
-const BUTTON_DELAY = 600;
+const TITLE_DURATION = 400;
+const SUBTITLE_DELAY = 120;
+const SUBTITLE_DURATION = 380;
+const CARD_STAGGER = 140;
+const CARD_DURATION = 360;
+const BUTTON_DELAY = 480;
 
 export default function AnalyzeFirstScreen() {
   const router = useRouter();
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
 
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(24);
@@ -117,6 +122,7 @@ export default function AnalyzeFirstScreen() {
   };
 
   const cardStyles = [card1Style, card2Style, card3Style, card4Style];
+  const buttonLabelStyle = isSmallScreen ? styles.buttonTextSmall : undefined;
 
   return (
     <View style={styles.container}>
@@ -132,30 +138,78 @@ export default function AnalyzeFirstScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.hero}>
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={[
+            styles.content,
+            isCompactScreen && styles.contentCompact,
+            isSmallScreen && styles.contentTight,
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.hero, isSmallScreen && styles.heroTight]}>
             <Animated.View style={[styles.titleBlock, titleStyle]}>
-              <Text style={styles.title}>One organ.{"\n"}Four systems affected.</Text>
+              <Text
+                style={[
+                  styles.title,
+                  isCompactScreen && styles.titleCondensed,
+                  isSmallScreen && styles.titleExtraCondensed,
+                ]}
+              >
+                One organ.{"\n"}Four systems affected.
+              </Text>
             </Animated.View>
             <Animated.View style={[styles.subtitleBlock, subtitleStyle]}>
-              <Text style={styles.subtitle}>
+              <Text
+                style={[
+                  styles.subtitle,
+                  isCompactScreen && styles.subtitleCondensed,
+                  isSmallScreen && styles.subtitleExtraCondensed,
+                ]}
+              >
                 Modern packaged foods contain hundreds of ingredients your gut was never designed to handle.
               </Text>
             </Animated.View>
           </View>
 
-          <View style={styles.cardsSection}>
+          <View
+            style={[
+              styles.cardsSection,
+              isCompactScreen && styles.cardsSectionCompact,
+              isSmallScreen && styles.cardsSectionTight,
+            ]}
+          >
             {SYSTEM_CARDS.map((card, i) => (
-              <Animated.View key={card.title} style={[styles.systemCard, cardStyles[i]]}>
-                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+              <Animated.View
+                key={card.title}
+                style={[
+                  styles.systemCard,
+                  isCompactScreen && styles.systemCardCompact,
+                  isSmallScreen && styles.systemCardTight,
+                  cardStyles[i],
+                ]}
+              >
+                <Text style={[styles.cardEmoji, isSmallScreen && styles.cardEmojiTight]}>{card.emoji}</Text>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{card.title}</Text>
-                  <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
+                  <Text
+                    style={[styles.cardTitle, isCompactScreen && styles.cardTitleCondensed, isSmallScreen && styles.cardTitleTight]}
+                  >
+                    {card.title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cardSubtitle,
+                      isCompactScreen && styles.cardSubtitleCondensed,
+                      isSmallScreen && styles.cardSubtitleTight,
+                    ]}
+                  >
+                    {card.subtitle}
+                  </Text>
                 </View>
               </Animated.View>
             ))}
           </View>
-        </View>
+        </ScrollView>
 
         <View style={styles.buttonContainer}>
           <Animated.View style={[buttonStyle, styles.buttonWrap]}>
@@ -163,6 +217,7 @@ export default function AnalyzeFirstScreen() {
               title="Analyze My Gut Health →"
               onPress={handleAnalyze}
               style={styles.primaryButton}
+              textStyle={buttonLabelStyle}
             />
           </Animated.View>
         </View>
@@ -182,80 +237,147 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
+    paddingHorizontal: rs(Spacing.md),
+    paddingTop: rs(Spacing.sm),
+    paddingBottom: rs(Spacing.xs),
   },
   backButton: {
-    padding: Spacing.xs,
+    padding: rs(Spacing.xs),
+  },
+  contentScroll: {
+    flex: 1,
   },
   content: {
-    flex: 1,
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.lg),
+    paddingBottom: rs(Spacing.lg),
+  },
+  contentCompact: {
+    paddingHorizontal: rs(Spacing.xl),
+    paddingBottom: rs(Spacing.sm),
+  },
+  contentTight: {
+    paddingHorizontal: rs(Spacing.lg),
+    paddingTop: rs(Spacing.md),
+    paddingBottom: rs(Spacing.xs),
   },
   hero: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: rs(Spacing.xl),
+  },
+  heroTight: {
+    marginBottom: rs(Spacing.lg),
   },
   titleBlock: {
-    marginBottom: Spacing.lg,
+    marginBottom: rs(Spacing.lg),
     alignItems: "center",
   },
   title: {
-    fontSize: 28,
+    fontSize: rf(28),
     fontWeight: "700",
-    lineHeight: 36,
+    lineHeight: rf(36),
     color: Colors.text,
     letterSpacing: -0.4,
     textAlign: "center",
+  },
+  titleCondensed: {
+    fontSize: rf(26),
+    lineHeight: rf(34),
+  },
+  titleExtraCondensed: {
+    fontSize: rf(24),
+    lineHeight: rf(32),
   },
   subtitleBlock: {
     alignItems: "center",
   },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: rf(16),
+    lineHeight: rf(24),
     color: Colors.textSecondary,
     textAlign: "center",
   },
+  subtitleCondensed: {
+    fontSize: rf(15),
+    lineHeight: rf(22),
+  },
+  subtitleExtraCondensed: {
+    fontSize: rf(14),
+    lineHeight: rf(20),
+  },
   cardsSection: {
     width: "100%",
-    gap: 18,
-    marginBottom: Spacing.massive,
+    gap: rs(18),
+    marginBottom: rs(Spacing.massive),
+  },
+  cardsSectionCompact: {
+    gap: rs(14),
+    marginBottom: rs(Spacing.xxl),
+  },
+  cardsSectionTight: {
+    gap: rs(12),
+    marginBottom: rs(Spacing.xl),
   },
   systemCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xxl,
-    borderRadius: 16,
+    paddingVertical: rs(Spacing.xl),
+    paddingHorizontal: rs(Spacing.xxl),
+    borderRadius: rs(16),
     borderWidth: 1,
     borderColor: "#E5E7EB",
     ...Shadows.sm,
   },
+  systemCardCompact: {
+    paddingVertical: rs(Spacing.lg),
+    paddingHorizontal: rs(Spacing.xl),
+    borderRadius: rs(14),
+  },
+  systemCardTight: {
+    paddingVertical: rs(Spacing.md),
+    paddingHorizontal: rs(Spacing.lg),
+    borderRadius: rs(12),
+  },
   cardEmoji: {
-    fontSize: 28,
-    marginRight: Spacing.lg,
+    fontSize: rf(28),
+    marginRight: rs(Spacing.lg),
+  },
+  cardEmojiTight: {
+    fontSize: rf(24),
+    marginRight: rs(Spacing.md),
   },
   cardContent: {
     flex: 1,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: "700",
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: rs(4),
+  },
+  cardTitleCondensed: {
+    fontSize: rf(15),
+  },
+  cardTitleTight: {
+    fontSize: rf(14),
+    marginBottom: rs(2),
   },
   cardSubtitle: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: rf(14),
+    lineHeight: rf(21),
     color: Colors.textSecondary,
   },
+  cardSubtitleCondensed: {
+    fontSize: rf(13),
+    lineHeight: rf(19),
+  },
+  cardSubtitleTight: {
+    fontSize: rf(12),
+    lineHeight: rf(18),
+  },
   buttonContainer: {
-    ...OnboardingButtonBar,
+    ...ROnboardingButtonBar,
   },
   buttonWrap: {
     width: "100%",
@@ -263,5 +385,9 @@ const styles = StyleSheet.create({
   primaryButton: {
     width: "100%",
     ...Shadows.md,
+  },
+  buttonTextSmall: {
+    fontSize: rf(15),
+    lineHeight: rf(21),
   },
 });

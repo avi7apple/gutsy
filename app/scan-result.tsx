@@ -1,10 +1,13 @@
 import { FadeIn, ScanResultSkeleton } from "@/components/SkeletonCard";
 import { Colors } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { getOnboardingProfile, type OnboardingProfile } from "@/lib/onboarding-storage";
 import type { AlternativeProduct } from "@/lib/product-alternatives";
 import { getPendingScanResult } from "@/lib/scan-result-store";
+import { updateUserStreak } from "@/lib/streak-calculator";
 import { supabase } from "@/lib/supabase";
 import type { ScanResult } from "@/types/scan";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -149,6 +152,7 @@ function normalizeAlternatives(raw: unknown): AlternativeProduct[] {
 }
 
 export default function ScanResultScreen() {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -186,7 +190,7 @@ export default function ScanResultScreen() {
         if (data) {
           const analysis = normalizeAnalysis(data.analysis);
           const ingredientAnalysis =
-            normalizeIngredientAnalysis(data.ingredient_analysis) ?? analysis.ingredientAnalysis;
+            analysis.ingredientAnalysis ?? normalizeIngredientAnalysis(data.ingredient_analysis);
           const analysisWithIngredient = ingredientAnalysis
             ? { ...analysis, ingredientAnalysis }
             : analysis;
@@ -240,6 +244,29 @@ export default function ScanResultScreen() {
         .update({ logged_as_eaten: true })
         .eq("id", params.id)
         .eq("user_id", user.id);
+      
+      // Invalidate queries to update home page recent scans and history page
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+      queryClient.invalidateQueries({ queryKey: ["scansForDay", todayKey] });
+      queryClient.invalidateQueries({ queryKey: ["scansForDay"] }); // Invalidate all date keys
+      queryClient.invalidateQueries({ queryKey: ["allScans"] });
+      queryClient.invalidateQueries({ queryKey: ["recentScans"] });
+      queryClient.invalidateQueries({ queryKey: ["weekData"] });
+      queryClient.invalidateQueries({ queryKey: ["gutScore"] });
+      
+      // Force immediate refetch of user stats for streak update
+      queryClient.invalidateQueries({ queryKey: ["userStats"] });
+      queryClient.refetchQueries({ queryKey: ["userStats"] });
+      
+      // Update user streak after logging as eaten
+      await updateUserStreak(user.id);
+      
+      // Force another refetch after updating streak
+      queryClient.refetchQueries({ queryKey: ["userStats"] });
+      queryClient.refetchQueries({ queryKey: ["weekData"] });
+      queryClient.refetchQueries({ queryKey: ["gutScore"] });
+      
       setLoggedAsEaten(true);
     } catch (e) {
       console.warn("Log as eaten error", e);
@@ -293,17 +320,17 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   message: {
-    marginTop: 12,
-    fontSize: 16,
+    marginTop: rs(12),
+    fontSize: rf(16),
     color: Colors.textSecondary,
   },
   backBtn: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    marginTop: rs(16),
+    paddingVertical: rs(12),
+    paddingHorizontal: rs(24),
   },
   backBtnText: {
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.primary,
     fontWeight: "600",
   },

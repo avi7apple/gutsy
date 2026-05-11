@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Colors } from "@/constants/theme";
 import { isNetworkRequestFailure, shouldRetryQuery } from "@/lib/network-errors";
 import { persistQueryCache, restoreQueryCache } from "@/lib/query-persister";
@@ -123,6 +124,7 @@ export default function RootLayout() {
   }
 
   const appContent = (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="dark" />
@@ -150,6 +152,7 @@ export default function RootLayout() {
         </Stack>
       </GestureHandlerRootView>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 
   if (!RuntimeSuperwallProvider) {

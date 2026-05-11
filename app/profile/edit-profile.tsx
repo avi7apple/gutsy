@@ -1,6 +1,7 @@
 import OnboardingButton from "@/components/onboarding/OnboardingButton";
 import { Shimmer } from "@/components/SkeletonCard";
 import { BorderRadius, Colors, Fonts, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { fetchProfileSettings, updateProfileName } from "@/lib/profile-settings";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -146,9 +147,9 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: rs(36),
+    height: rs(36),
+    borderRadius: rs(18),
     backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
@@ -157,7 +158,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 24,
+    fontSize: rf(24),
     color: Colors.text,
   },
   content: {
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.text,
   },
   inputDisabled: {
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
   helperText: {
     marginTop: Spacing.sm,
     fontFamily: Fonts.body,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textMuted,
   },
   footer: {

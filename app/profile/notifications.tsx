@@ -1,5 +1,6 @@
 import OnboardingButton from "@/components/onboarding/OnboardingButton";
 import { BorderRadius, Colors, Fonts, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { getDeviceInstructions, getNotificationPermissionStatus, initializeNotificationChannels, requestNotificationPermissions } from "@/lib/notification-permissions";
 import { notificationService } from "@/lib/notification-service";
 import { fetchProfileSettings, updateNotificationSettings } from "@/lib/profile-settings";
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Fonts.pageTitle,
-    fontSize: 24,
+    fontSize: rf(24),
     color: Colors.text,
   },
   content: {
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontFamily: Fonts.sectionHeader,
-    fontSize: 18,
+    fontSize: rf(18),
     color: Colors.text,
     marginBottom: Spacing.lg,
   },
@@ -366,9 +367,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   permissionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: rs(40),
+    height: rs(40),
+    borderRadius: rs(20),
     backgroundColor: Colors.background,
     alignItems: "center",
     justifyContent: "center",
@@ -378,16 +379,16 @@ const styles = StyleSheet.create({
   },
   permissionTitle: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: "600",
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
   permissionDescription: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: rf(20),
   },
   enableButton: {
     backgroundColor: Colors.primary,
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
   },
   enableButtonText: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 15,
+    fontSize: rf(15),
     fontWeight: "600",
     color: "#FFFFFF",
   },
@@ -412,15 +413,15 @@ const styles = StyleSheet.create({
   },
   instructionTitle: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: "600",
     color: Colors.text,
   },
   instructionText: {
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.text,
-    lineHeight: 20,
+    lineHeight: rf(20),
     marginBottom: Spacing.lg,
   },
   dismissButton: {
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   },
   dismissButtonText: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 14,
+    fontSize: rf(14),
     fontWeight: "500",
     color: Colors.primary,
   },
@@ -454,15 +455,15 @@ const styles = StyleSheet.create({
   },
   testButtonText: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 15,
+    fontSize: rf(15),
     fontWeight: "600",
     color: Colors.primary,
   },
   testDescription: {
     fontFamily: Fonts.body,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: rf(18),
     textAlign: "center",
   },
   // Notification item styles
@@ -476,9 +477,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   itemIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: rs(32),
+    height: rs(32),
+    borderRadius: rs(16),
     backgroundColor: Colors.background,
     alignItems: "center",
     justifyContent: "center",
@@ -488,15 +489,15 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontFamily: Fonts.smallLabel,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.text,
   },
   itemDescription: {
     marginTop: Spacing.xs,
     fontFamily: Fonts.body,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: rf(18),
   },
   footer: {
     ...OnboardingButtonBar,

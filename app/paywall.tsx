@@ -1,4 +1,5 @@
 import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { markPaywallSeen, startTrialAccess } from "@/lib/subscription-access";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
@@ -161,22 +162,22 @@ const styles = StyleSheet.create({
   title: {
     marginTop: Spacing.xl,
     fontFamily: Fonts.cardTitle,
-    fontSize: 22,
+    fontSize: rf(22),
     color: Colors.text,
     textAlign: "center",
   },
   body: {
     marginTop: Spacing.md,
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.textSecondary,
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: rf(22),
   },
   error: {
     marginTop: Spacing.xl,
     fontFamily: Fonts.body,
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.error,
     textAlign: "center",
   },
@@ -185,11 +186,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
-    borderRadius: 12,
+    borderRadius: rs(12),
   },
   retryButtonText: {
     color: "#fff",
     fontFamily: Fonts.cardTitle,
-    fontSize: 15,
+    fontSize: rf(15),
   },
 });

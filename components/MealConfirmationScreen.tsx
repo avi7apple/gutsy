@@ -1,4 +1,5 @@
 import { BorderRadius, Colors, Fonts, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
 import type { DetectedIngredient, PortionAdjustment } from "@/types/scan";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -32,6 +33,8 @@ export function MealConfirmationScreen({
   imageUrl,
 }: MealConfirmationScreenProps) {
   const insets = useSafeAreaInsets();
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
   const [confirmations, setConfirmations] = useState<Record<string, boolean>>({});
   const [adjustedPortions, setAdjustedPortions] = useState<Record<string, number>>({});
   const [customIngredients, setCustomIngredients] = useState<Array<{name: string, grams: number}>>([]);
@@ -121,11 +124,11 @@ export function MealConfirmationScreen({
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container}
+      style={[styles.container, isSmallScreen && styles.containerTight]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.dragHandleWrap}>
-        <View style={styles.dragHandle} />
+        <View style={[styles.dragHandle, isSmallScreen && styles.dragHandleCompact]} />
       </View>
       <View style={styles.header}>
         <TouchableOpacity onPress={onCancel} style={styles.cancelButton}>
@@ -355,16 +358,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     maxHeight: '100%', // Ensure it doesn't exceed parent height
   },
+  containerTight: {
+    paddingHorizontal: rs(Spacing.xs),
+  },
   dragHandleWrap: {
     alignItems: "center",
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xs,
   },
   dragHandle: {
-    width: 44,
-    height: 5,
+    width: rs(44),
+    height: rs(5),
     borderRadius: 999,
     backgroundColor: Colors.border,
+  },
+  dragHandleCompact: {
+    width: rs(36),
   },
   header: {
     flexDirection: 'row',
@@ -378,7 +387,7 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: rf(18),
     fontWeight: '600',
     color: Colors.text,
     fontFamily: Fonts.body,
@@ -414,7 +423,7 @@ const styles = StyleSheet.create({
   },
   imageText: {
     color: Colors.background,
-    fontSize: 14,
+    fontSize: rf(14),
     fontWeight: '500',
     fontFamily: Fonts.body,
   },
@@ -422,14 +431,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: rf(20),
     fontWeight: '600',
     color: Colors.text,
     marginBottom: Spacing.xs,
     fontFamily: Fonts.body,
   },
   sectionSubtitle: {
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
     marginBottom: Spacing.md,
     fontFamily: Fonts.body,
@@ -452,9 +461,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   confirmationCheckbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: rs(24),
+    height: rs(24),
+    borderRadius: rs(12),
     borderWidth: 2,
     borderColor: Colors.border,
     backgroundColor: Colors.background,
@@ -471,7 +480,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ingredientName: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '500',
     color: Colors.text,
     marginBottom: 2,
@@ -486,13 +495,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   cookingState: {
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
     textTransform: 'capitalize',
     fontFamily: Fonts.body,
   },
   confidenceWarning: {
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.warning,
     marginLeft: Spacing.sm,
     fontFamily: Fonts.body,
@@ -508,7 +517,7 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.borderLight,
   },
   portionLabel: {
-    fontSize: 13,
+    fontSize: rf(13),
     fontWeight: '500',
     color: Colors.text,
     marginBottom: Spacing.xs,
@@ -527,28 +536,28 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   portionInput: {
-    width: 80,
-    height: 40,
+    width: rs(80),
+    height: rs(40),
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: BorderRadius.md,
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '600',
     color: Colors.text,
     fontFamily: Fonts.body,
   },
   gramsUnit: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '500',
     color: Colors.textSecondary,
     marginLeft: Spacing.xs,
     fontFamily: Fonts.body,
   },
   portionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: rs(32),
+    height: rs(32),
+    borderRadius: rs(16),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -561,13 +570,13 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.lg,
   },
   portionGrams: {
-    fontSize: 18,
+    fontSize: rf(18),
     fontWeight: '600',
     color: Colors.text,
     fontFamily: Fonts.body,
   },
   portionUnit: {
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
     marginLeft: 2,
     fontFamily: Fonts.body,
@@ -577,7 +586,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xs,
   },
   visualReasoningText: {
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',
@@ -585,7 +594,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   visualMethod: {
-    fontSize: 10,
+    fontSize: rf(10),
     color: Colors.primary,
     textAlign: 'center',
     fontFamily: Fonts.body,
@@ -599,7 +608,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
   },
   summaryTitle: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '600',
     color: Colors.text,
     marginBottom: Spacing.sm,
@@ -612,12 +621,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   summaryLabel: {
-    fontSize: 14,
+    fontSize: rf(14),
     color: Colors.textSecondary,
     fontFamily: Fonts.body,
   },
   summaryValue: {
-    fontSize: 14,
+    fontSize: rf(14),
     fontWeight: '500',
     color: Colors.text,
     fontFamily: Fonts.body,
@@ -639,13 +648,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   confirmButtonText: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '600',
     color: Colors.background,
     fontFamily: Fonts.body,
   },
   warningText: {
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.warning,
     textAlign: 'center',
     fontFamily: Fonts.body,
@@ -658,9 +667,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   addIngredientButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: rs(32),
+    height: rs(32),
+    borderRadius: rs(16),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -681,9 +690,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   closeFormButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: rs(24),
+    height: rs(24),
+    borderRadius: rs(12),
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -701,7 +710,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.text,
     fontFamily: Fonts.body,
   },
@@ -716,13 +725,13 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.text,
     fontFamily: Fonts.body,
     marginRight: Spacing.sm,
   },
   gramUnit: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '500',
     color: Colors.textSecondary,
     fontFamily: Fonts.body,
@@ -740,7 +749,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: Colors.backgroundWhite,
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '600',
     fontFamily: Fonts.body,
   },
@@ -759,15 +768,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   customIngredientName: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '500',
     color: Colors.text,
     fontFamily: Fonts.body,
   },
   removeButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: rs(24),
+    height: rs(24),
+    borderRadius: rs(12),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -784,14 +793,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.text,
     fontFamily: Fonts.body,
     marginRight: Spacing.xs,
     textAlign: 'center',
   },
   customGramUnit: {
-    fontSize: 16,
+    fontSize: rf(16),
     fontWeight: '500',
     color: Colors.textSecondary,
     fontFamily: Fonts.body,

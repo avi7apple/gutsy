@@ -3,6 +3,10 @@
  * Based on the product spec: clean, wellness-focused, accessible
  */
 
+import { rf, rs } from "@/lib/hooks/use-responsive";
+
+// Layout breakpoints live in @/lib/design/breakpoints — import there for conditional component logic.
+
 export const Colors = {
   primary: "#325C3A",
   primaryLight: "#3D6E46",
@@ -146,4 +150,47 @@ export const OnboardingButtonBar = {
   paddingTop: Spacing.lg,
   paddingBottom: Spacing.xxl,
   paddingHorizontal: Spacing.xxl,
+};
+
+/**
+ * Responsive Design Tokens
+ * These automatically scale based on screen size while preserving
+ * the exact design on iPhone 14 Pro Max (430pt width).
+ */
+export const RSpacing = {
+  xs: rs(4),
+  sm: rs(8),
+  md: rs(12),
+  lg: rs(16),
+  xl: rs(20),
+  xxl: rs(24),
+  xxxl: rs(32),
+  huge: rs(40),
+  massive: rs(48),
+};
+
+export const RTypography = {
+  h1: { fontFamily: Fonts.pageTitle, fontSize: rf(28), lineHeight: rf(36), letterSpacing: -0.5 },
+  h2: { fontFamily: Fonts.sectionHeader, fontSize: rf(24), lineHeight: rf(32), letterSpacing: -0.3 },
+  h3: { fontFamily: Fonts.cardTitle, fontSize: rf(20), lineHeight: rf(28) },
+  body: { fontFamily: Fonts.body, fontSize: rf(16), lineHeight: rf(24) },
+  bodySmall: { fontFamily: Fonts.body, fontSize: rf(14), lineHeight: rf(20) },
+  button: { fontFamily: Fonts.button, fontSize: rf(17), lineHeight: rf(22) },
+  caption: { fontFamily: Fonts.subtitle, fontSize: rf(12), lineHeight: rf(16) },
+  score: { fontFamily: Fonts.scoreNumber, fontSize: rf(48), lineHeight: rf(56) },
+};
+
+export const RBorderRadius = {
+  sm: rs(8),
+  md: rs(12),
+  lg: rs(16),
+  xl: rs(20),
+  xxl: rs(24),
+  full: 9999,
+};
+
+export const ROnboardingButtonBar = {
+  paddingTop: rs(Spacing.lg),
+  paddingBottom: rs(Spacing.xxl),
+  paddingHorizontal: rs(Spacing.xxl),
 };

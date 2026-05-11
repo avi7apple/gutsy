@@ -65,13 +65,13 @@ export function useScansForDay(date: Date) {
   return useQuery({
     queryKey: ["scansForDay", dateKey],
     queryFn: () => fetchScansForDay(date),
-    staleTime: 1000 * 30, // 30 seconds - real-time updates
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 15,
     retry: shouldRetryQuery,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
+    refetchOnMount: false,
+    refetchOnReconnect: true,
     initialData: [],
-    // Enable background refetching for real-time updates
-    refetchInterval: 1000 * 60, // Refetch every minute
+    refetchInterval: 1000 * 60 * 3,
   });
 }

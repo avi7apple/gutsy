@@ -1,15 +1,16 @@
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Platform,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { rf } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Spacing, Colors, Shadows, Fonts } from "@/constants/theme";
+import React from "react";
+import {
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TAB_BAR_HEIGHT = 72;
 const ICON_SIZE = 24;
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: Fonts.tabBarLabel,
-    fontSize: 11,
+    fontSize: rf(11),
     letterSpacing: 0.2,
   },
   labelActive: {

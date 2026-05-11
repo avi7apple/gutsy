@@ -1,7 +1,7 @@
-import { isNetworkRequestFailure } from "@/lib/network-errors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import "react-native-url-polyfill/auto";
+import { isNetworkRequestFailure } from "./network-errors";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -45,7 +45,7 @@ const networkSafeFetch: typeof globalThis.fetch = async (input, init) => {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
-    autoRefreshToken: false,
+    autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
   },
@@ -80,6 +80,7 @@ supabase.auth.getUser = (async (jwt?: string) => {
       error: result?.error ?? null,
     };
   } catch {
-    return { data: { user: null }, error: null };
+    const { data } = await supabase.auth.getSession();
+    return { data: { user: data.session?.user ?? null }, error: null };
   }
 }) as typeof supabase.auth.getUser;

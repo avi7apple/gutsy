@@ -1,4 +1,5 @@
 import { BorderRadius, Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -30,6 +31,9 @@ const NOTCH_HEIGHT = 28;
 export default function TryFreeScreen() {
   const router = useRouter();
   const { height: winHeight, width: winWidth } = useWindowDimensions();
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
 
   const phoneFloat = useSharedValue(0);
   const phoneRotate = useSharedValue(0);
@@ -85,7 +89,7 @@ export default function TryFreeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       {/* Navigation row */}
-      <View style={styles.navRow}>
+      <View style={[styles.navRow, isCompactScreen && styles.navRowCompact]}>
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={handleClose}
@@ -104,13 +108,20 @@ export default function TryFreeScreen() {
       </View>
 
       {/* Headline */}
-      <View style={styles.headlineBlock}>
-        <Text style={styles.headlineLine1}>We want you to</Text>
-        <Text style={styles.headlineLine2}>try Gutsy for free.</Text>
+      <View style={[styles.headlineBlock, isCompactScreen && styles.headlineBlockCompact]}>
+        <Text style={[styles.headlineLine1, isSmallScreen && styles.headlineLineTight]}>We want you to</Text>
+        <Text style={[styles.headlineLine2, isSmallScreen && styles.headlineLineTight]}>try Gutsy for free.</Text>
       </View>
 
       {/* Phone mockup */}
-      <View style={[styles.phoneWrap, { height: phoneHeight }]}>
+      <View
+        style={[
+          styles.phoneWrap,
+          { height: phoneHeight },
+          isCompactScreen && styles.phoneWrapCompact,
+          isSmallScreen && styles.phoneWrapTight,
+        ]}
+      >
         <Animated.View
           style={[
             styles.phoneFrame,
@@ -183,16 +194,16 @@ export default function TryFreeScreen() {
       </View>
 
       {/* Bottom action zone */}
-      <View style={styles.bottomZone}>
-        <Text style={styles.noPayment}>✓ No Payment Due Now.</Text>
+      <View style={[styles.bottomZone, isCompactScreen && styles.bottomZoneCompact]}>
+        <Text style={[styles.noPayment, isSmallScreen && styles.noPaymentTight]}>✓ No Payment Due Now.</Text>
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={[styles.primaryBtn, isSmallScreen && styles.primaryBtnTight]}
           onPress={handleTryFree}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>Try for $0.00</Text>
+          <Text style={[styles.primaryBtnText, isSmallScreen && styles.primaryBtnTextTight]}>Try for $0.00</Text>
         </TouchableOpacity>
-        <Text style={styles.pricing}>Just $39.99 per year ($0.77/week) </Text>
+        <Text style={[styles.pricing, isSmallScreen && styles.pricingTight]}>Just $49.99 per year ($0.96/week) </Text>
       </View>
     </SafeAreaView>
   );
@@ -211,6 +222,10 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingTop: Spacing.xs,
   },
+  navRowCompact: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
   closeBtn: {
     width: 40,
     height: 40,
@@ -222,7 +237,7 @@ const styles = StyleSheet.create({
   },
   restoreText: {
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.textMuted,
   },
   headlineBlock: {
@@ -231,29 +246,44 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
     alignItems: "center",
   },
+  headlineBlockCompact: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+  },
   headlineLine1: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 32,
+    fontSize: rf(32),
     color: Colors.text,
-    lineHeight: 40,
+    lineHeight: rf(40),
     letterSpacing: -0.5,
     textAlign: "center",
   },
   headlineLine2: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 32,
+    fontSize: rf(32),
     color: Colors.primary,
-    lineHeight: 40,
+    lineHeight: rf(40),
     letterSpacing: -0.5,
     fontStyle: "italic",
-    marginTop: 2,
+    marginTop: rs(2),
     textAlign: "center",
+  },
+  headlineLineTight: {
+    fontSize: rf(28),
+    lineHeight: rf(34),
   },
   phoneWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 220,
+  },
+  phoneWrapCompact: {
+    minHeight: 200,
+  },
+  phoneWrapTight: {
+    minHeight: 180,
+    paddingHorizontal: Spacing.md,
   },
   phoneFrame: {
     backgroundColor: "#1a1a1a",
@@ -295,7 +325,7 @@ const styles = StyleSheet.create({
   cornerBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
   cornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
   emoji: {
-    fontSize: 48,
+    fontSize: rf(48),
   },
   scanLineContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -325,7 +355,7 @@ const styles = StyleSheet.create({
   },
   toolbarLabel: {
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: rf(12),
     color: "rgba(255,255,255,0.6)",
   },
   toolbarIcons: {
@@ -339,13 +369,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
   },
   shutterBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: rs(56),
+    height: rs(56),
+    borderRadius: rs(28),
     borderWidth: 3,
     borderColor: "rgba(255,255,255,0.5)",
     backgroundColor: "transparent",
-    marginTop: 12,
+    marginTop: rs(12),
   },
   bottomZone: {
     paddingHorizontal: Spacing.xxl,
@@ -353,11 +383,19 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxxl + 8,
     alignItems: "center",
   },
+  bottomZoneCompact: {
+    paddingHorizontal: Spacing.xl,
+     paddingBottom: Spacing.xxxl,
+  },
   noPayment: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.textMuted,
     marginBottom: Spacing.md,
+  },
+  noPaymentTight: {
+    fontSize: rf(14),
+    marginBottom: Spacing.sm,
   },
   primaryBtn: {
     backgroundColor: Colors.primary,
@@ -368,15 +406,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...Shadows.md,
   },
+  primaryBtnTight: {
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.xxl,
+  },
   primaryBtnText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 18,
+    fontSize: rf(18),
     color: "#FFFFFF",
+  },
+  primaryBtnTextTight: {
+    fontSize: rf(16),
   },
   pricing: {
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textMuted,
     marginTop: Spacing.lg,
+  },
+  pricingTight: {
+    marginTop: Spacing.md,
   },
 });

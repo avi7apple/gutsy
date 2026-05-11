@@ -23,8 +23,8 @@
  *   gut_score       0-100 (composite)
  */
 
-import type { ProductInfo } from "@/lib/product-lookup";
 import type { OnboardingProfile } from "@/lib/onboarding-storage";
+import type { ProductInfo } from "@/lib/product-lookup";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  PUBLIC TYPES
@@ -176,6 +176,11 @@ const GUT_IRRITANTS = [
   "carrageenan", "polysorbate",
   ...ARTIFICIAL_SWEETENERS,
   "xanthan gum", "cellulose gum",
+];
+
+const FRIED_REFINED_SIGNALS = [
+  "fried", "deep fried", "fried tortilla", "tortilla chips", "white flour", "maida", "refined flour",
+  "shortening", "hydrogenated", "palm oil",
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -373,6 +378,7 @@ interface IngredientSignals {
   inflammatoryCount: number;
   sweetenerCount: number;
   gutIrritantCount: number;
+  friedRefinedCount: number;
 }
 
 function analyzeIngredients(product: ProductInfo): IngredientSignals {
@@ -404,11 +410,14 @@ function analyzeIngredients(product: ProductInfo): IngredientSignals {
   const gutIrritantCount = ordered.length > 0
     ? Math.round(weightedCount(ordered, GUT_IRRITANTS, "bad"))
     : countKw(ing, GUT_IRRITANTS);
+  const friedRefinedCount = ordered.length > 0
+    ? Math.round(weightedCount(ordered, FRIED_REFINED_SIGNALS, "bad"))
+    : countKw(ing, FRIED_REFINED_SIGNALS);
 
   return {
     liveCultures, wholeGrain, prebiotic, omega3, antioxidants,
     hfcs, partiallyHydro, artificialColorCount, modifiedStarchPrimary,
-    additiveCount, inflammatoryCount, sweetenerCount, gutIrritantCount,
+    additiveCount, inflammatoryCount, sweetenerCount, gutIrritantCount, friedRefinedCount,
   };
 }
 
@@ -476,6 +485,8 @@ function scoreBloating(
   // Gut irritants
   if (sig.gutIrritantCount >= 3) s -= 2;
   else if (sig.gutIrritantCount >= 1) s -= 1;
+  if (sig.friedRefinedCount >= 2) s -= 2;
+  else if (sig.friedRefinedCount >= 1) s -= 1;
 
   // Whole foods are gentler
   if (cat === "whole_food" || cat === "anti_inflammatory") s += 1;
@@ -528,6 +539,7 @@ function scoreDigestion(
   // Additives
   if (sig.additiveCount > 5) s -= 2;
   else if (sig.additiveCount > 2) s -= 1;
+  if (sig.friedRefinedCount >= 2) s -= 1;
 
   // Very high fat slows digestion
   if (sn.fat_g > 20) s -= 1;
@@ -582,6 +594,8 @@ function scoreSkin(
   // Artificial colors are directly linked to inflammation
   if (sig.artificialColorCount >= 3) s -= 1.5;
   else if (sig.artificialColorCount >= 1) s -= 0.5;
+  if (sig.friedRefinedCount >= 2) s -= 1.5;
+  else if (sig.friedRefinedCount >= 1) s -= 0.5;
 
   // Probiotic foods are good for skin (gut-skin axis)
   if (cat === "probiotic") s += 1.5;
@@ -637,6 +651,9 @@ function scoreEnergy(
     s = subtype === "sugar_sweetened_beverage" ? 2 : subtype === "instant_noodle" ? 3 : subtype === "salty_snack" ? 3.5 : 3.5;
     return clamp(Math.round(s), 0, 10);
   }
+
+  if (sig.friedRefinedCount >= 2) s -= 2;
+  else if (sig.friedRefinedCount >= 1) s -= 1;
 
   // Anti-inflammatory = stable energy
   if (cat === "anti_inflammatory") s += 1;
@@ -700,6 +717,8 @@ function ingredientGutBonus(sig: IngredientSignals): number {
   if (sig.modifiedStarchPrimary) bonus -= 2;
   if (sig.additiveCount > 5) bonus -= 4;
   else if (sig.additiveCount > 3) bonus -= 2;
+  if (sig.friedRefinedCount >= 2) bonus -= 5;
+  else if (sig.friedRefinedCount >= 1) bonus -= 2;
 
   return bonus;
 }

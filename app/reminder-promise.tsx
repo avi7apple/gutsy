@@ -1,4 +1,5 @@
 import { BorderRadius, Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
@@ -41,6 +42,14 @@ const CARD_CONTENT = [
 
 export default function ReminderPromiseScreen() {
   const router = useRouter();
+  const breakpoint = useBreakpoint();
+  const isSmallScreen = breakpoint === "small";
+  const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
+
+  const bellSize = isSmallScreen ? rs(BELL_SIZE * 0.85) : rs(BELL_SIZE);
+  const ringOuterSize = isSmallScreen ? rs(RING_OUTER * 0.9) : rs(RING_OUTER);
+  const ringInnerSize = isSmallScreen ? rs(RING_INNER * 0.9) : rs(RING_INNER);
+  const badgeSize = isSmallScreen ? rs(BADGE_SIZE * 0.85) : rs(BADGE_SIZE);
 
   const ringInnerOpacity = useSharedValue(0.12);
   const ringOuterOpacity = useSharedValue(0.08);
@@ -155,77 +164,112 @@ export default function ReminderPromiseScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.content}>
+      <View style={[styles.content, isCompactScreen && styles.contentCompact]}>
         {/* Nav */}
-        <View style={styles.nav}>
+        <View style={[styles.nav, isSmallScreen && styles.navCompact]}>
           <TouchableOpacity
             onPress={handleBack}
-            style={styles.navBtn}
+            style={[styles.navBtn, isSmallScreen && styles.navBtnTight]}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleRestore}
-            style={styles.navBtn}
+            style={[styles.navBtn, isSmallScreen && styles.navBtnTight]}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.restoreText}>Restore</Text>
+            <Text style={[styles.restoreText, isSmallScreen && styles.restoreTextTight]}>Restore</Text>
           </TouchableOpacity>
         </View>
 
         {/* Headline */}
-        <Text style={styles.headline}>
-          {"We'll"} send you a reminder{"\n"}before your{" "}
+        <Text style={[styles.headline, isSmallScreen && styles.headlineTight]}>
+          {"We'll"} send you a reminder{"\n"}before your {" "}
           <Text style={styles.headlineHighlight}>free trial ends</Text>.
         </Text>
 
         {/* Bell hero + cards (flex to fill) */}
-        <View style={styles.middleSection}>
-          <View style={styles.bellWrap}>
+        <View style={[styles.middleSection, isSmallScreen && styles.middleSectionTight]}>
+          <View
+            style={[
+              styles.bellWrap,
+              { height: ringOuterSize + rs(isSmallScreen ? 24 : 40) },
+              isSmallScreen && styles.bellWrapTight,
+            ]}
+          >
             <Animated.View
-              style={[styles.ring, styles.ringOuter, ringOuterStyle]}
+              style={[
+                styles.ring,
+                styles.ringOuter,
+                { width: ringOuterSize, height: ringOuterSize },
+                ringOuterStyle,
+              ]}
             />
             <Animated.View
-              style={[styles.ring, styles.ringInner, ringInnerStyle]}
+              style={[
+                styles.ring,
+                styles.ringInner,
+                { width: ringInnerSize, height: ringInnerSize },
+                ringInnerStyle,
+              ]}
             />
             <Animated.View style={[styles.bellContainer, bellContainerStyle]}>
-              <View style={styles.bellCircle}>
-                <Text style={styles.bellEmoji}>🔔</Text>
-                <Animated.View style={[styles.badge, badgeStyle]}>
+              <View
+                style={[
+                  styles.bellCircle,
+                  {
+                    width: bellSize + rs(40),
+                    height: bellSize + rs(40),
+                    borderRadius: (bellSize + rs(40)) / 2,
+                  },
+                ]}
+              >
+                <Text style={[styles.bellEmoji, isSmallScreen && styles.bellEmojiTight]}>🔔</Text>
+                <Animated.View
+                  style={[
+                    styles.badge,
+                    {
+                      width: badgeSize,
+                      height: badgeSize,
+                      borderRadius: badgeSize / 2,
+                    },
+                    badgeStyle,
+                  ]}
+                >
                   <Text style={styles.badgeText}>1</Text>
                 </Animated.View>
               </View>
             </Animated.View>
           </View>
 
-          <View style={styles.cards}>
-            <Animated.View style={[styles.card, card1Style]}>
-              <Text style={styles.cardEmoji}>{CARD_CONTENT[0].emoji}</Text>
-              <Text style={styles.cardText}>{CARD_CONTENT[0].text}</Text>
+          <View style={[styles.cards, isSmallScreen && styles.cardsTight]}>
+            <Animated.View style={[styles.card, isSmallScreen && styles.cardTight, card1Style]}>
+              <Text style={[styles.cardEmoji, isSmallScreen && styles.cardEmojiTight]}>{CARD_CONTENT[0].emoji}</Text>
+              <Text style={[styles.cardText, isSmallScreen && styles.cardTextTight]}>{CARD_CONTENT[0].text}</Text>
             </Animated.View>
-            <Animated.View style={[styles.card, card2Style]}>
-              <Text style={styles.cardEmoji}>{CARD_CONTENT[1].emoji}</Text>
-              <Text style={styles.cardText}>{CARD_CONTENT[1].text}</Text>
+            <Animated.View style={[styles.card, isSmallScreen && styles.cardTight, card2Style]}>
+              <Text style={[styles.cardEmoji, isSmallScreen && styles.cardEmojiTight]}>{CARD_CONTENT[1].emoji}</Text>
+              <Text style={[styles.cardText, isSmallScreen && styles.cardTextTight]}>{CARD_CONTENT[1].text}</Text>
             </Animated.View>
-            <Animated.View style={[styles.card, card3Style]}>
-              <Text style={styles.cardEmoji}>{CARD_CONTENT[2].emoji}</Text>
-              <Text style={styles.cardText}>{CARD_CONTENT[2].text}</Text>
+            <Animated.View style={[styles.card, isSmallScreen && styles.cardTight, card3Style]}>
+              <Text style={[styles.cardEmoji, isSmallScreen && styles.cardEmojiTight]}>{CARD_CONTENT[2].emoji}</Text>
+              <Text style={[styles.cardText, isSmallScreen && styles.cardTextTight]}>{CARD_CONTENT[2].text}</Text>
             </Animated.View>
           </View>
         </View>
 
         {/* Bottom zone */}
-        <View style={styles.bottomZone}>
-          <Text style={styles.noPayment}>✓ No Payment Due Now.</Text>
+        <View style={[styles.bottomZone, isCompactScreen && styles.bottomZoneCompact]}>
+          <Text style={[styles.noPayment, isSmallScreen && styles.noPaymentTight]}>✓ No Payment Due Now.</Text>
           <TouchableOpacity
-            style={styles.primaryBtn}
+            style={[styles.primaryBtn, isSmallScreen && styles.primaryBtnTight]}
             onPress={handleContinue}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryBtnText}>Continue for FREE.</Text>
+            <Text style={[styles.primaryBtnText, isSmallScreen && styles.primaryBtnTextTight]}>Continue for FREE.</Text>
           </TouchableOpacity>
-          <Text style={styles.pricing}>Just $39.99 per year ($0.77/week)</Text>
+          <Text style={[styles.pricing, isSmallScreen && styles.pricingTight]}>Just $49.99 per year ($0.96/week)</Text>
         </View>
       </View>
     </SafeAreaView>
@@ -244,26 +288,44 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxl,
     justifyContent: "space-between",
   },
+  contentCompact: {
+    paddingHorizontal: Spacing.xl,
+     paddingBottom: Spacing.xl,
+  },
   nav: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+  navCompact: {
+    marginTop: Spacing.xs,
+  },
   navBtn: {
     padding: Spacing.sm,
   },
+  navBtnTight: {
+    padding: Spacing.xs,
+  },
   restoreText: {
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: rf(16),
     color: Colors.textMuted,
+  },
+  restoreTextTight: {
+    fontSize: rf(14),
   },
   headline: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 24,
-    lineHeight: 32,
+    fontSize: rf(24),
+    lineHeight: rf(32),
     color: Colors.text,
     textAlign: "center",
     marginTop: Spacing.lg,
+  },
+  headlineTight: {
+    fontSize: rf(22),
+    lineHeight: rf(30),
+    marginTop: Spacing.md,
   },
   headlineHighlight: {
     color: Colors.primary,
@@ -275,11 +337,17 @@ const styles = StyleSheet.create({
     minHeight: 0,
     marginVertical: Spacing.lg,
   },
+  middleSectionTight: {
+    marginVertical: Spacing.md,
+  },
   bellWrap: {
     height: RING_OUTER + 40,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.xl,
+  },
+  bellWrapTight: {
+    marginBottom: Spacing.lg,
   },
   ring: {
     position: "absolute",
@@ -301,9 +369,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bellCircle: {
-    width: BELL_SIZE + 40,
-    height: BELL_SIZE + 40,
-    borderRadius: (BELL_SIZE + 40) / 2,
     backgroundColor: `${Colors.accent}18`,
     borderWidth: 1,
     borderColor: `${Colors.accent}40`,
@@ -311,26 +376,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bellEmoji: {
-    fontSize: 64,
+    fontSize: rf(64),
+  },
+  bellEmojiTight: {
+    fontSize: rf(54),
   },
   badge: {
     position: "absolute",
     top: -4,
     right: -4,
-    width: BADGE_SIZE,
-    height: BADGE_SIZE,
-    borderRadius: BADGE_SIZE / 2,
     backgroundColor: Colors.error,
     alignItems: "center",
     justifyContent: "center",
   },
   badgeText: {
     fontFamily: Fonts.cardTitle,
-    fontSize: 14,
+    fontSize: rf(14),
     color: "#FFFFFF",
   },
   cards: {
     gap: Spacing.sm,
+  },
+  cardsTight: {
+    gap: Spacing.xs,
   },
   card: {
     flexDirection: "row",
@@ -342,25 +410,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${Colors.primary}18`,
   },
+  cardTight: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
   cardEmoji: {
-    fontSize: 20,
+    fontSize: rf(20),
     marginRight: Spacing.sm,
+  },
+  cardEmojiTight: {
+    fontSize: rf(18),
+    marginRight: Spacing.xs,
   },
   cardText: {
     flex: 1,
     fontFamily: Fonts.body,
-    fontSize: 13,
+    fontSize: rf(13),
     color: Colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: rf(18),
+  },
+  cardTextTight: {
+    fontSize: rf(12),
+    lineHeight: rf(17),
   },
   bottomZone: {
     alignItems: "center",
   },
+  bottomZoneCompact: {
+    paddingHorizontal: Spacing.lg,
+  },
   noPayment: {
     fontFamily: Fonts.body,
-    fontSize: 15,
+    fontSize: rf(15),
     color: Colors.textMuted,
     marginBottom: Spacing.sm,
+  },
+  noPaymentTight: {
+    fontSize: rf(14),
   },
   primaryBtn: {
     backgroundColor: Colors.primary,
@@ -371,15 +457,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...Shadows.md,
   },
+  primaryBtnTight: {
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.xxl,
+  },
   primaryBtnText: {
     fontFamily: Fonts.button,
-    fontSize: 18,
+    fontSize: rf(18),
     color: "#FFFFFF",
+  },
+  primaryBtnTextTight: {
+    fontSize: rf(16),
   },
   pricing: {
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: rf(12),
     color: Colors.textMuted,
     marginTop: Spacing.md,
+  },
+  pricingTight: {
+    marginTop: Spacing.sm,
   },
 });

@@ -1,21 +1,23 @@
- import { Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { rf, rs } from "@/lib/hooks/use-responsive";
 import { useRouter, type Href } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
-    ActivityIndicator,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withSpring,
-    withTiming,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 
 const LOADING_DURATION_MS = 10000;
@@ -57,13 +59,22 @@ const KNOWLEDGE_SECTIONS = [
 
 const CARD_ANIM_DELAY = 400;
 const CARD_STAGGER = 180;
+const MIN_SCREEN_WIDTH = 390;
+const BASE_SCREEN_WIDTH = 430;
+const SMALL_SCREEN_THRESHOLD = 400;
+const SMALL_SPACING_MULTIPLIER = 1.08;
+const SMALL_FONT_MULTIPLIER = 1.1;
+
+type ProfileStyles = ReturnType<typeof createStyles>;
 
 function AnimatedCard({
   section,
   index,
+  styles,
 }: {
   section: (typeof KNOWLEDGE_SECTIONS)[0];
   index: number;
+  styles: ProfileStyles;
 }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(24);
@@ -105,6 +116,15 @@ function AnimatedCard({
 
 export default function CreatingProfileScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const clampedWidth = Math.min(Math.max(width, MIN_SCREEN_WIDTH), BASE_SCREEN_WIDTH);
+  const widthProgress = (clampedWidth - MIN_SCREEN_WIDTH) / (BASE_SCREEN_WIDTH - MIN_SCREEN_WIDTH);
+  const isSmallWidth = clampedWidth <= SMALL_SCREEN_THRESHOLD;
+  const spacingScaleBase = 0.65 + widthProgress * 0.35;
+  const fontScaleBase = 0.75 + widthProgress * 0.25;
+  const spacingScale = spacingScaleBase * (isSmallWidth ? SMALL_SPACING_MULTIPLIER : 1);
+  const fontScale = fontScaleBase * (isSmallWidth ? SMALL_FONT_MULTIPLIER : 1);
+  const styles = useMemo(() => createStyles(spacingScale, fontScale), [spacingScale, fontScale]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -124,17 +144,21 @@ export default function CreatingProfileScreen() {
         >
           <View style={styles.loaderSection}>
             <ActivityIndicator size="large" color={Colors.primary} style={styles.loader} />
-            <Text style={styles.loaderText}>Creating your gut profile...</Text>
+            <Text style={styles.loaderText}>
+              Creating your gut profile...
+            </Text>
           </View>
 
           <View style={styles.knowledgeSection}>
-            <Text style={styles.sectionTitle}>Your gut affects everything</Text>
+            <Text style={styles.sectionTitle}>
+              Your gut affects everything
+            </Text>
             <Text style={styles.sectionSubtitle}>
               See how your gut shapes your skin, mood, and daily comfort, and how Gutsy helps you take control.
             </Text>
 
             {KNOWLEDGE_SECTIONS.map((section, index) => (
-              <AnimatedCard key={section.title} section={section} index={index} />
+              <AnimatedCard key={section.title} section={section} index={index} styles={styles} />
             ))}
           </View>
         </ScrollView>
@@ -143,108 +167,121 @@ export default function CreatingProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FAF8F3",
-  },
-  safeArea: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.huge,
-    paddingBottom: Spacing.massive,
-    flexGrow: 1,
-  },
-  loaderSection: {
-    alignItems: "center",
-    marginBottom: Spacing.xxxl,
-  },
-  loader: {
-    marginBottom: Spacing.lg,
-  },
-  loaderText: {
-    fontFamily: Fonts.body,
-    fontSize: 17,
-    color: "#2E2E2E",
-    lineHeight: 24,
-  },
-  knowledgeSection: {
-    gap: Spacing.xxl,
-  },
-  sectionTitle: {
-    fontFamily: Fonts.cardTitle,
-    fontSize: 20,
-    color: "#2E2E2E",
-    lineHeight: 28,
-    marginBottom: Spacing.xs,
-  },
-  sectionSubtitle: {
-    fontFamily: Fonts.body,
-    fontSize: 15,
-    color: "#6B7280",
-    lineHeight: 22,
-    marginBottom: Spacing.xl,
-  },
-  topicCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: Spacing.xxl,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    ...Shadows.sm,
-  },
-  topicTitle: {
-    fontFamily: Fonts.cardTitle,
-    fontSize: 17,
-    color: "#325C3A",
-    lineHeight: 24,
-    marginBottom: Spacing.md,
-    textTransform: "capitalize",
-  },
-  bulletList: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  bulletRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-  },
-  bullet: {
-    fontFamily: Fonts.body,
-    fontSize: 15,
-    color: "#6B7280",
-    lineHeight: 22,
-  },
-  bulletText: {
-    flex: 1,
-    fontFamily: Fonts.body,
-    fontSize: 15,
-    color: "#2E2E2E",
-    lineHeight: 22,
-  },
-  helpBox: {
-    backgroundColor: "#F8F9F6",
-    borderRadius: 12,
-    padding: Spacing.lg,
-    borderLeftWidth: 3,
-    borderLeftColor: "#325C3A",
-  },
-  helpLabel: {
-    fontFamily: Fonts.body,
-    fontSize: 13,
-    color: "#325C3A",
-    marginBottom: Spacing.xs,
-  },
-  helpText: {
-    fontFamily: Fonts.body,
-    fontSize: 14,
-    color: "#2E2E2E",
-    lineHeight: 20,
-  },
-});
+const createStyles = (spacingScale: number, fontScale: number) => {
+  const scaleSpace = (value: number) => Math.round(rs(value) * spacingScale);
+  const scaleFont = (value: number) => Math.round(rf(value) * fontScale);
+  const scaleRadius = (value: number) => Math.round(rs(value) * spacingScale);
+  const borderLeft = Math.max(1, Math.round(spacingScale * 2));
+
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "#FAF8F3",
+    },
+    safeArea: {
+      flex: 1,
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: scaleSpace(Spacing.xxl),
+      paddingTop: scaleSpace(Spacing.huge),
+      paddingBottom: scaleSpace(Spacing.massive),
+      flexGrow: 1,
+    },
+    loaderSection: {
+      alignItems: "center",
+      marginBottom: scaleSpace(Spacing.xxxl),
+    },
+    loader: {
+      marginBottom: scaleSpace(Spacing.lg),
+    },
+    loaderText: {
+      fontFamily: Fonts.body,
+      fontSize: scaleFont(17),
+      color: "#2E2E2E",
+      lineHeight: scaleFont(24),
+      textAlign: "center",
+    },
+    knowledgeSection: {
+      gap: scaleSpace(Spacing.xxl),
+    },
+    sectionTitle: {
+      fontFamily: Fonts.cardTitle,
+      fontSize: scaleFont(20),
+      color: "#2E2E2E",
+      lineHeight: scaleFont(28),
+      marginBottom: scaleSpace(Spacing.xs),
+      textAlign: "center",
+    },
+    sectionSubtitle: {
+      fontFamily: Fonts.body,
+      fontSize: scaleFont(15),
+      color: "#6B7280",
+      lineHeight: scaleFont(22),
+      marginBottom: scaleSpace(Spacing.xl),
+      textAlign: "center",
+    },
+    topicCard: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: scaleRadius(16),
+      paddingVertical: scaleSpace(Spacing.xl),
+      paddingHorizontal: scaleSpace(Spacing.xxl),
+      borderWidth: Math.max(1, Math.round(spacingScale)),
+      borderColor: "#E5E7EB",
+      ...Shadows.sm,
+    },
+    topicTitle: {
+      fontFamily: Fonts.cardTitle,
+      fontSize: scaleFont(17),
+      color: "#325C3A",
+      lineHeight: scaleFont(24),
+      marginBottom: scaleSpace(Spacing.md),
+      textTransform: "capitalize",
+      textAlign: "left",
+    },
+    bulletList: {
+      gap: scaleSpace(Spacing.sm),
+      marginBottom: scaleSpace(Spacing.lg),
+    },
+    bulletRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: scaleSpace(Spacing.sm),
+    },
+    bullet: {
+      fontFamily: Fonts.body,
+      fontSize: scaleFont(15),
+      color: "#6B7280",
+      lineHeight: scaleFont(22),
+    },
+    bulletText: {
+      flex: 1,
+      fontFamily: Fonts.body,
+      fontSize: scaleFont(15),
+      color: "#2E2E2E",
+      lineHeight: scaleFont(22),
+    },
+    helpBox: {
+      backgroundColor: "#F8F9F6",
+      borderRadius: scaleRadius(12),
+      paddingVertical: scaleSpace(Spacing.md),
+      paddingHorizontal: scaleSpace(Spacing.lg),
+      borderLeftWidth: borderLeft,
+      borderLeftColor: "#325C3A",
+    },
+    helpLabel: {
+      fontFamily: Fonts.body,
+      fontSize: scaleFont(13),
+      color: "#325C3A",
+      marginBottom: scaleSpace(Spacing.xs),
+    },
+    helpText: {
+      fontFamily: Fonts.body,
+      fontSize: scaleFont(14),
+      color: "#2E2E2E",
+      lineHeight: scaleFont(20),
+    },
+  });
+};
