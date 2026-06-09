@@ -9,9 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gutsyai.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.gutsyai.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,13 +43,7 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#2D6A4F",
-          "defaultChannel": "default",
-          "sounds": [
-            {
-              "name": "default",
-              "file": "./assets/audio/notification.wav"
-            }
-          ]
+          "defaultChannel": "default"
         }
       ],
       [
@@ -70,7 +69,8 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

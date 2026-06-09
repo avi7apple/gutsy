@@ -1,10 +1,31 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import "react-native-url-polyfill/auto";
+import {
+  isInvalidRefreshTokenError,
+  isRecoverableAuthNetworkError,
+} from "./auth-errors";
 import { isNetworkRequestFailure } from "./network-errors";
+import { logOutRevenueCatUser } from "./revenuecat";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+let clearingStaleSession = false;
+
+async function clearStaleAuthSessionLocal(): Promise<void> {
+  if (clearingStaleSession) return;
+  clearingStaleSession = true;
+
+  try {
+    await Promise.allSettled([
+      supabase.auth.signOut({ scope: "local" }),
+      logOutRevenueCatUser(),
+    ]);
+  } finally {
+    clearingStaleSession = false;
+  }
+}
 
 /**
  * Wraps the global fetch so that network-transport errors (no connectivity,
@@ -56,15 +77,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(
-    "[supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Create a .env file from .env.example and restart Expo with `npx expo start -c`."
+    "[supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Create a .env file from .env.example and restart Expo with `npx expo start -c`.",
   );
 }
 
 /**
  * Safe wrapper around getUser() that:
  *  1. Always returns { data: { user }, error } – never null `data`.
- *  2. Catches all network / auth errors so callers can safely destructure.
- *  3. Times out after 5 s so a stalled request can never hang the app.
+ *  2. Clears ghost sessions when the refresh token is invalid server-side.
+ *  3. Falls back to the cached session only on network/timeout failures.
  */
 const _origGetUser = supabase.auth.getUser.bind(supabase.auth);
 supabase.auth.getUser = (async (jwt?: string) => {
@@ -75,12 +96,43 @@ supabase.auth.getUser = (async (jwt?: string) => {
         setTimeout(() => reject(new Error("getUser timeout")), 5000),
       ),
     ]);
+
+    if (result?.error && isInvalidRefreshTokenError(result.error)) {
+      await clearStaleAuthSessionLocal();
+      return {
+        data: { user: null },
+        error: result.error,
+      };
+    }
+
     return {
       data: { user: result?.data?.user ?? null },
       error: result?.error ?? null,
     };
-  } catch {
-    const { data } = await supabase.auth.getSession();
-    return { data: { user: data.session?.user ?? null }, error: null };
+  } catch (error) {
+    if (isInvalidRefreshTokenError(error)) {
+      await clearStaleAuthSessionLocal();
+      return {
+        data: { user: null },
+        error: error as import("@supabase/supabase-js").AuthError,
+      };
+    }
+
+    if (isRecoverableAuthNetworkError(error)) {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError && isInvalidRefreshTokenError(sessionError)) {
+        await clearStaleAuthSessionLocal();
+        return { data: { user: null }, error: sessionError };
+      }
+      return {
+        data: { user: data.session?.user ?? null },
+        error: null,
+      };
+    }
+
+    return {
+      data: { user: null },
+      error: error as import("@supabase/supabase-js").AuthError,
+    };
   }
 }) as typeof supabase.auth.getUser;

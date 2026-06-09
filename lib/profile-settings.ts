@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { resolveDisplayFullName } from "@/lib/user-display-name";
 import {
     DEFAULT_NOTIFICATION_SETTINGS,
     DEFAULT_PRIVACY_SETTINGS,
@@ -84,12 +85,7 @@ export async function fetchProfileSettings(): Promise<ProfileSettings> {
 
   const row = data as ProfileRow | null;
 
-  const fullName =
-    row?.full_name ??
-    user.user_metadata?.full_name ??
-    user.user_metadata?.name ??
-    user.email?.split("@")[0] ??
-    "";
+  const fullName = resolveDisplayFullName(user, row?.full_name);
 
   return {
     fullName,

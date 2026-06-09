@@ -1,29 +1,48 @@
 import {
-    BorderRadius,
-    Colors,
-    Fonts,
-    Shadows,
+  BorderRadius,
+  Colors,
+  Fonts,
+  Shadows,
 } from "@/constants/theme";
+import { finalizePostAuth, syncOnboardingToAccount } from "@/lib/auth";
+import { useBlockBack } from "@/lib/hooks/use-block-back";
+import {
+  getRevenueCatEntitlementId,
+  getRevenueCatOfferings,
+  isRevenueCatPurchaseCancelled,
+  isRevenueCatSupported,
+  logInRevenueCatUser,
+  purchaseRevenueCatPackage,
+  type RevenueCatPackage,
+} from "@/lib/revenuecat";
+import { savePendingPurchase } from "@/lib/pending-purchase-storage";
+import {
+  applyRevenueCatCustomerInfo,
+  recordPaywallFunnelStep,
+} from "@/lib/subscription-access";
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Dimensions,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, {
-    interpolate,
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withSequence,
-    withTiming,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
 } from "react-native-reanimated";
 
 // ─── Scaling system ────────────────────────────────────────────────────────────
@@ -116,8 +135,24 @@ export default function TrialTimelineScreen() {
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("yearly");
   const billingDateStr = useMemo(() => getBillingDate(), []);
+  useBlockBack();
+
+  const [packages, setPackages] = useState<RevenueCatPackage[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
 
   const fillProgress = useSharedValue(0);
+
+  useEffect(() => {
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await recordPaywallFunnelStep(user.id, "trial_timeline");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     fillProgress.value = withSequence(
@@ -126,6 +161,38 @@ export default function TrialTimelineScreen() {
       withDelay(FILL_PAUSE, withTiming(1, { duration: FILL_DURATION })),
     );
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!isRevenueCatSupported()) {
+        if (!cancelled) setPackagesLoading(false);
+        return;
+      }
+      try {
+        const offerings = await getRevenueCatOfferings();
+        const available = offerings?.current?.availablePackages ?? [];
+        if (!cancelled) setPackages(available);
+      } catch (err) {
+        console.warn("Failed to load RevenueCat offerings:", err);
+      } finally {
+        if (!cancelled) setPackagesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedPackage = useMemo<RevenueCatPackage | null>(() => {
+    if (packages.length === 0) return null;
+    const wantsAnnual = selectedPlan === "yearly";
+    const match = packages.find((pkg) => {
+      const type = String(pkg.packageType ?? "").toUpperCase();
+      return wantsAnnual ? type === "ANNUAL" : type === "WEEKLY";
+    });
+    return match ?? packages[0];
+  }, [packages, selectedPlan]);
 
   const fillHeightStyle = useAnimatedStyle(() => ({
     height: interpolate(fillProgress.value, [0, 1], [0, TRACK_HEIGHT]),
@@ -167,10 +234,107 @@ export default function TrialTimelineScreen() {
   }));
 
   const handleBack = () => router.back();
-  const handleRestore = () => {
-    /* TODO */
-  };
-  const handleStartTrial = () => router.push("/create-account");
+
+  const handleStartTrial = useCallback(async () => {
+    if (purchasing) return;
+
+    if (!isRevenueCatSupported()) {
+      Alert.alert(
+        "Purchases unavailable",
+        "In-app purchases require a development build. Continuing to account setup.",
+        [{ text: "OK", onPress: () => router.push("/create-account") }],
+      );
+      return;
+    }
+
+    if (!selectedPackage) {
+      Alert.alert(
+        "Plan unavailable",
+        packagesLoading
+          ? "Still loading plans. Please try again in a moment."
+          : "We couldn't find an active plan. Check your RevenueCat offering setup.",
+      );
+      return;
+    }
+
+    setPurchasing(true);
+    try {
+      const purchaseInfo = await purchaseRevenueCatPackage(selectedPackage);
+      if (!purchaseInfo) {
+        throw new Error("We couldn't complete the purchase. Please try again.");
+      }
+
+      const purchaseContext = {
+        pricePaid: selectedPackage.product.price ?? null,
+        currency: selectedPackage.product.currencyCode ?? null,
+      };
+
+      await savePendingPurchase(purchaseInfo, purchaseContext);
+
+      const entitlementId = getRevenueCatEntitlementId() ?? "pro";
+      const diagEnt = purchaseInfo?.entitlements?.active?.[entitlementId];
+      console.log("[RC-DIAG] post-purchase entitlement", {
+        entitlementId,
+        packageId: selectedPackage.identifier,
+        productId: selectedPackage.product.identifier,
+        productPrice: selectedPackage.product.price,
+        productCurrency: selectedPackage.product.currencyCode,
+        hasIntroPrice: Boolean(selectedPackage.product.introPrice),
+        introPrice: selectedPackage.product.introPrice,
+        entActive: Boolean(diagEnt),
+        entIdentifier: diagEnt?.identifier ?? null,
+        periodType: diagEnt?.periodType ?? null,
+        willRenew: diagEnt?.willRenew ?? null,
+        originalPurchaseDate: diagEnt?.originalPurchaseDate ?? null,
+        latestPurchaseDate: diagEnt?.latestPurchaseDate ?? null,
+        expirationDate: diagEnt?.expirationDate ?? null,
+        store: diagEnt?.store ?? null,
+        productIdOnEnt: diagEnt?.productIdentifier ?? null,
+        originalAppUserId: purchaseInfo?.originalAppUserId ?? null,
+      });
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/create-account");
+        return;
+      }
+
+      await syncOnboardingToAccount();
+
+      if (isRevenueCatSupported()) {
+        try {
+          await logInRevenueCatUser(user.id);
+        } catch (err) {
+          console.warn("RC logIn after purchase failed:", err);
+        }
+      }
+
+      const unlocked = await applyRevenueCatCustomerInfo(
+        user.id,
+        purchaseInfo,
+        purchaseContext,
+      );
+      if (unlocked) {
+        await recordPaywallFunnelStep(user.id, "purchase_completed");
+        router.replace("/(tabs)" as any);
+        return;
+      }
+
+      await finalizePostAuth(router);
+    } catch (err) {
+      if (isRevenueCatPurchaseCancelled(err)) {
+        return;
+      }
+      Alert.alert(
+        "Purchase failed",
+        err instanceof Error ? err.message : "Please try again in a moment.",
+      );
+    } finally {
+      setPurchasing(false);
+    }
+  }, [purchasing, packagesLoading, selectedPackage, router]);
 
   const selectedCaption =
     PLANS.find((p) => p.id === selectedPlan)?.caption ?? PLANS[1].caption;
@@ -187,13 +351,6 @@ export default function TrialTimelineScreen() {
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="arrow-back" size={s(24)} color={Colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleRestore}
-            style={styles.navBtn}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.restoreText}>Restore</Text>
           </TouchableOpacity>
         </View>
 
@@ -365,17 +522,28 @@ export default function TrialTimelineScreen() {
 
       {/* Bottom button bar */}
       <View style={styles.bottomZone}>
-        <Text style={styles.noPayment}>✓ No Payment Due Now.</Text>
+        <Text style={styles.noPayment}>
+          {selectedPlan === "yearly"
+            ? "✓ No Payment Due Now."
+            : "Charged today: $9.99"}
+        </Text>
         <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={handleStartTrial}
+          style={[styles.primaryBtn, purchasing && styles.primaryBtnDisabled]}
+          onPress={() => {
+            void handleStartTrial();
+          }}
+          disabled={purchasing || packagesLoading}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>
-            {selectedPlan === "yearly"
-              ? "Start My 3-Day Free Trial"
-              : "Start My Journey"}
-          </Text>
+          {purchasing ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryBtnText}>
+              {selectedPlan === "yearly"
+                ? "Start My 3-Day Free Trial"
+                : "Start My Journey"}
+            </Text>
+          )}
         </TouchableOpacity>
         <Text style={styles.pricing}>{selectedCaption}</Text>
       </View>
@@ -398,17 +566,11 @@ const styles = StyleSheet.create({
   },
   nav: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: s(16),
   },
   navBtn: {
     padding: s(8),
-  },
-  restoreText: {
-    fontFamily: Fonts.body,
-    fontSize: f(15),
-    color: Colors.textMuted,
   },
   headlineWrap: {
     alignItems: "center",
@@ -628,6 +790,9 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     ...Shadows.md,
+  },
+  primaryBtnDisabled: {
+    opacity: 0.6,
   },
   primaryBtnText: {
     fontFamily: Fonts.cardTitle,

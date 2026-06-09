@@ -4,6 +4,7 @@ import { BorderRadius, Colors, Fonts, OnboardingButtonBar, Shadows, Spacing } fr
 import { rf, rs } from "@/lib/hooks/use-responsive";
 import { fetchProfileSettings, updateProfileName } from "@/lib/profile-settings";
 import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
@@ -21,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -55,6 +57,8 @@ export default function EditProfileScreen() {
     try {
       setSaving(true);
       await updateProfileName(trimmedName);
+      await queryClient.invalidateQueries({ queryKey: ["authUser"] });
+      await queryClient.invalidateQueries({ queryKey: ["userData"] });
       Alert.alert("Saved", "Your profile has been updated.", [
         { text: "OK", onPress: () => router.back() },
       ]);

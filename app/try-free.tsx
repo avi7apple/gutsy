@@ -1,25 +1,27 @@
 import { BorderRadius, Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { useBlockBack } from "@/lib/hooks/use-block-back";
+import { recordPaywallFunnelStep } from "@/lib/subscription-access";
+import { supabase } from "@/lib/supabase";
 import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
-import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import {
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
 } from "react-native";
 import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
+    Easing,
+    interpolate,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming,
 } from "react-native-reanimated";
 
 const PHONE_HEIGHT_RATIO = 0.4;
@@ -34,6 +36,18 @@ export default function TryFreeScreen() {
   const breakpoint = useBreakpoint();
   const isSmallScreen = breakpoint === "small";
   const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
+  useBlockBack();
+
+  useEffect(() => {
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await recordPaywallFunnelStep(user.id, "try_free");
+      }
+    })();
+  }, []);
 
   const phoneFloat = useSharedValue(0);
   const phoneRotate = useSharedValue(0);
@@ -76,10 +90,6 @@ export default function TryFreeScreen() {
     ],
   }));
 
-  const handleClose = () => router.back();
-  const handleRestore = () => {
-    /* TODO: restore purchases */
-  };
   const handleTryFree = () => router.push("/reminder-promise");
 
   const phoneHeight = winHeight * PHONE_HEIGHT_RATIO;
@@ -88,24 +98,9 @@ export default function TryFreeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      {/* Navigation row */}
-      <View style={[styles.navRow, isCompactScreen && styles.navRowCompact]}>
-        <TouchableOpacity
-          style={styles.closeBtn}
-          onPress={handleClose}
-          hitSlop={12}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="close" size={22} color={Colors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleRestore}
-          hitSlop={12}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.restoreText}>Restore</Text>
-        </TouchableOpacity>
-      </View>
+
+      {/* Spacer matches the old restore nav row so layout stays unchanged */}
+      <View style={[styles.topBar, isCompactScreen && styles.topBarCompact]} />
 
       {/* Headline */}
       <View style={[styles.headlineBlock, isCompactScreen && styles.headlineBlockCompact]}>
@@ -214,31 +209,19 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: Colors.background,
   },
-  navRow: {
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     paddingTop: Spacing.xs,
+    minHeight: rs(44),
   },
-  navRowCompact: {
+  topBarCompact: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-  },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  restoreText: {
-    fontFamily: Fonts.body,
-    fontSize: rf(16),
-    color: Colors.textMuted,
+    minHeight: rs(40),
   },
   headlineBlock: {
     paddingHorizontal: Spacing.xxl,

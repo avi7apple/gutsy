@@ -2,6 +2,8 @@
  * Shared scan result shape for photo and barcode flows.
  * Matches meal_scans columns and UI display.
  */
+import type { ProductInsight } from "@/types/product-scan";
+
 export type ScanType = "photo" | "barcode" | "manual";
 
 /** Cooking states for ingredient detection */
@@ -166,6 +168,8 @@ export interface ScanAnalysis {
   serving_size_display?: string;
   /** Servings per container — from vision */
   servings_per_container?: number;
+  /** Health-focused product scan payload (barcode / packaged product) */
+  productInsight?: ProductInsight;
   /** Cached LLM ingredient analysis for Ingredients tab */
   ingredientAnalysis?: {
     items: Array<{

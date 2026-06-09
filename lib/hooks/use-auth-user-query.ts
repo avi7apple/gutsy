@@ -1,5 +1,6 @@
 import { shouldRetryQuery } from "@/lib/network-errors";
 import { supabase } from "@/lib/supabase";
+import { resolveDisplayFullName, resolveFirstName } from "@/lib/user-display-name";
 import type { User } from "@supabase/supabase-js";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -7,16 +8,35 @@ import { useQuery } from "@tanstack/react-query";
 export interface AuthUserProfile {
   user: User | null;
   firstName: string;
+  fullName: string;
   avatarUrl: string | null;
   email: string | null;
   memberSince: string | null;
 }
 
-async function fetchAuthUser(): Promise<User | null> {
+type AuthUserPayload = {
+  user: User | null;
+  profileFullName: string | null;
+};
+
+async function fetchAuthUser(): Promise<AuthUserPayload> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return user ?? null;
+  if (!user) {
+    return { user: null, profileFullName: null };
+  }
+
+  const { data: profileRow } = await supabase
+    .from("user_profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return {
+    user,
+    profileFullName: profileRow?.full_name ?? null,
+  };
 }
 
 export function useAuthUserQuery() {
@@ -32,11 +52,10 @@ export function useAuthUserQuery() {
   });
 
   const profile = useMemo<AuthUserProfile>(() => {
-    const user = query.data ?? null;
-    const fullName = (user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? "").trim();
-    const firstName = fullName
-      ? fullName.split(/\s+/)[0] ?? ""
-      : user?.email?.split("@")[0] ?? "";
+    const user = query.data?.user ?? null;
+    const profileFullName = query.data?.profileFullName ?? null;
+    const fullName = resolveDisplayFullName(user, profileFullName);
+    const firstName = resolveFirstName(user, profileFullName);
     const avatarUrl = user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture ?? null;
 
     let memberSince: string | null = null;
@@ -48,6 +67,7 @@ export function useAuthUserQuery() {
     return {
       user,
       firstName,
+      fullName,
       avatarUrl,
       email: user?.email ?? null,
       memberSince,

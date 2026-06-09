@@ -29,6 +29,37 @@ export const Colors = {
   scoreRed: "#EF4444",
 };
 
+/** Scan result screen palette (product health UI) */
+export const ScanResultColors = {
+  primary: "#325C3A",
+  accent: "#8EB66D",
+  background: "#F8F9F6",
+  card: "#FFFFFF",
+  border: "#E8EDEA",
+  divider: "#EEF2EF",
+  textPrimary: "#1A1A1A",
+  textSecondary: "#6B7A6D",
+  textMuted: "#8A9A8D",
+  textItalic: "#9AA89D",
+  textBody: "#3D4D40",
+  chevron: "#B0BDB3",
+  imageBg: "#EAF3DE",
+  imageBorder: "#D4E8C2",
+  riskRed: "#E24B4A",
+  riskRedBg: "#FCEBEB",
+  riskRedText: "#791F1F",
+  riskAmber: "#EF9F27",
+  riskAmberBg: "#FAEEDA",
+  riskAmberText: "#633806",
+  riskGreen: "#639922",
+  riskGreenBg: "#EAF3DE",
+  riskGreenText: "#27500A",
+  riskGreenDark: "#3B6D11",
+  neutralBg: "#F4F7F4",
+  heart: "#E24B4A",
+  dashedAccent: "#8EB66D",
+} as const;
+
 /** Accent color per bucket for Gut Health Score screen */
 export const ScoreBucketColors = {
   needs_attention: "#EF4444",

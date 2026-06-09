@@ -1,5 +1,6 @@
 import { NOTIFICATION_TEMPLATES } from "@/types/notifications";
 import { NotificationSettings } from "@/types/profile";
+import { requestNotificationPermissions } from "@/lib/notification-permissions";
 import * as Notifications from "expo-notifications";
 
 // Configure notification handler
@@ -158,7 +159,7 @@ export class NotificationService {
     }
   }
 
-  private async cancelNotificationsByTag(tag: string): Promise<void> {
+  private   async cancelNotificationsByTag(tag: string): Promise<void> {
     try {
       const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
       
@@ -170,6 +171,75 @@ export class NotificationService {
     } catch (error) {
       console.error(`Error canceling notifications with tag ${tag}:`, error);
     }
+  }
+
+  /**
+   * Schedule trial-end reminders promised in the paywall funnel:
+   * - ~2 days before billing (step 2 of trial-timeline)
+   * - ~1 day before as a backup nudge
+   */
+  async scheduleTrialEndReminders(trialEndsAt: string): Promise<void> {
+    try {
+      await this.cancelTrialEndReminders();
+
+      const permission = await requestNotificationPermissions();
+      if (permission !== "granted") return;
+
+      const endMs = new Date(trialEndsAt).getTime();
+      if (!Number.isFinite(endMs) || endMs <= Date.now()) return;
+
+      const twoDayMs = endMs - 2 * 24 * 60 * 60 * 1000;
+      const oneDayMs = endMs - 1 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
+      const reminders: { atMs: number; body: string }[] = [];
+
+      if (twoDayMs > now) {
+        reminders.push({
+          atMs: twoDayMs,
+          body: "Your Gutsy free trial ends in 2 days. Cancel anytime in Settings if you don't want to continue.",
+        });
+      }
+
+      if (oneDayMs > now) {
+        reminders.push({
+          atMs: oneDayMs,
+          body: "Your Gutsy free trial ends tomorrow. You'll be charged unless you cancel in your subscription settings.",
+        });
+      }
+
+      // Sandbox trials can be shorter than 2 days — always schedule at least one
+      // reminder one hour before expiry when the 2-day window has already passed.
+      if (reminders.length === 0) {
+        const oneHourMs = endMs - 60 * 60 * 1000;
+        if (oneHourMs > now) {
+          reminders.push({
+            atMs: oneHourMs,
+            body: "Your Gutsy free trial is ending soon. Cancel anytime in Settings if you don't want to continue.",
+          });
+        }
+      }
+
+      for (const reminder of reminders) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Trial ending soon",
+            body: reminder.body,
+            data: { type: "trial-end-reminder" },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(reminder.atMs),
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error scheduling trial end reminders:", error);
+    }
+  }
+
+  async cancelTrialEndReminders(): Promise<void> {
+    await this.cancelNotificationsByTag("trial-end-reminder");
   }
 
   async cancelAllNotifications(): Promise<void> {

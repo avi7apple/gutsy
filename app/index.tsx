@@ -1,7 +1,8 @@
+import { resolveAuthenticatedUser } from "@/lib/auth-session";
 import { Colors } from "@/constants/theme";
 import { isNetworkRequestFailure } from "@/lib/network-errors";
 import { getOnboardingProfile } from "@/lib/onboarding-storage";
-import { supabase } from "@/lib/supabase";
+import { evaluateSubscriptionAccess, getSubscriptionProfile, hasPaidAccess } from "@/lib/subscription-access";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
@@ -16,23 +17,34 @@ export default function Index() {
 
   async function checkAuthAndOnboarding() {
     try {
-      // Prefer persisted session on startup to avoid false logouts when network/getUser is flaky.
-      const { data: { session } } = await supabase.auth.getSession();
-      let user = session?.user ?? null;
-
-      // If no persisted session user exists, try server validation as fallback.
-      if (!user) {
-        const { data } = await supabase.auth.getUser();
-        user = data.user ?? null;
-      }
+      const { user } = await resolveAuthenticatedUser();
 
       if (user) {
         // User is authenticated - check if they have completed onboarding
         const profile = await getOnboardingProfile();
-        
+
         if (profile?.goal) {
-          // Onboarding complete - direct access to app
-          setRedirectTo("/(tabs)");
+          try {
+            const access = await evaluateSubscriptionAccess(user.id);
+            if (access.hasPaidAccess) {
+              setRedirectTo("/(tabs)");
+            } else {
+              const hasSeenPaywall = Boolean(access.profile?.has_seen_paywall);
+              setRedirectTo(hasSeenPaywall ? "/paywall" : "/try-free");
+            }
+          } catch (error) {
+            console.error("Error evaluating subscription access:", error);
+            try {
+              const cachedProfile = await getSubscriptionProfile(user.id);
+              if (hasPaidAccess(cachedProfile)) {
+                setRedirectTo("/(tabs)");
+                return;
+              }
+            } catch {
+              // Ignore secondary read failure.
+            }
+            setRedirectTo("/paywall");
+          }
         } else {
           // Authenticated but onboarding not complete
           setRedirectTo("/onboarding/welcome");
@@ -40,10 +52,12 @@ export default function Index() {
       } else {
         // Not authenticated - check if onboarding data exists
         const profile = await getOnboardingProfile();
-        
+
         if (profile?.goal) {
-          // Has onboarding data but not authenticated - go to create account
-          setRedirectTo("/create-account");
+          // Onboarding done but no auth + no purchase yet -> re-enter the paywall funnel.
+          // /try-free -> /reminder-promise -> /trial-timeline handles the anonymous purchase,
+          // and /create-account is reached only after a successful purchase.
+          setRedirectTo("/try-free");
         } else {
           // No onboarding data - start onboarding
           setRedirectTo("/onboarding/welcome");

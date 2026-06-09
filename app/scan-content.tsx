@@ -50,6 +50,7 @@ type ErrorType = "camera_permission" | "product_not_found" | "network_error" | "
 interface ScanScreenContentProps {
   variant: "app" | "onboarding";
   previousTab?: string;
+  barcode?: string;
 }
 
 const PHOTO_FRAME_SIZE = 280;
@@ -62,9 +63,9 @@ const BARCODE_MIN_SCAN_QUALITY = 0.22;
 const BARCODE_FAST_SCAN_QUALITY = 0.32;
 const BARCODE_MOVEMENT_TOLERANCE = 40;
 const FALLBACK_SHEET_HEIGHT = 720;
-const MIN_VISIBLE_SHEET_HEIGHT = 420;
+const MIN_VISIBLE_SHEET_HEIGHT = 200;
 
-export function ScanScreenContent({ variant, previousTab }: ScanScreenContentProps) {
+export function ScanScreenContent({ variant, previousTab, barcode }: ScanScreenContentProps) {
   const queryClient = useQueryClient();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanMode, setScanMode] = useState<ScanMode>("barcode");
@@ -112,7 +113,7 @@ export function ScanScreenContent({ variant, previousTab }: ScanScreenContentPro
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = Dimensions.get("window");
   const safeWindowHeight = Number.isFinite(windowHeight) && windowHeight > 0 ? windowHeight : FALLBACK_SHEET_HEIGHT;
-  const collapsedSheetHeight = Math.max(MIN_VISIBLE_SHEET_HEIGHT, safeWindowHeight * 0.84);
+  const collapsedSheetHeight = Math.max(200, safeWindowHeight * 0.25);
   const fullScreenHeight = Math.max(MIN_VISIBLE_SHEET_HEIGHT, safeWindowHeight);
   const sheetHeightAnim = useRef(new Animated.Value(collapsedSheetHeight)).current;
   const scanLineProgress = useRef(new Animated.Value(0)).current;
@@ -518,8 +519,13 @@ export function ScanScreenContent({ variant, previousTab }: ScanScreenContentPro
   const presentScanResult = useCallback((result: ScanResult) => {
     setCurrentScanResult(result);
     setShowMealConfirmation(false);
-    setSheetFullScreen(true);
-    const targetHeight = Number.isFinite(fullScreenHeight) && fullScreenHeight > 0 ? fullScreenHeight : FALLBACK_SHEET_HEIGHT;
+    const isProduct = !result.isMeal;
+    setSheetFullScreen(!isProduct);
+    const targetHeight = isProduct
+      ? collapsedSheetHeight
+      : Number.isFinite(fullScreenHeight) && fullScreenHeight > 0
+        ? fullScreenHeight
+        : FALLBACK_SHEET_HEIGHT;
     sheetHeightAnim.setValue(targetHeight);
     setShowResult(false);
     requestAnimationFrame(() => {
@@ -799,6 +805,50 @@ export function ScanScreenContent({ variant, previousTab }: ScanScreenContentPro
     void loadProfile();
     void checkPendingResult();
   }, [checkPendingResult, ensureCameraPermission, loadProfile]);
+
+  const hasAutoBarcodeRunRef = useRef(false);
+  useEffect(() => {
+    if (!barcode) return;
+    if (!profile) return;
+    if (hasAutoBarcodeRunRef.current) return;
+    hasAutoBarcodeRunRef.current = true;
+
+    const run = async () => {
+      try {
+        // Switch to barcode mode and immediately analyze the provided barcode.
+        setScanMode("barcode");
+        setScanned(true);
+        setIsActivelyScanning(false);
+        setIsAnalyzing(true);
+        setScanState("analyzing");
+        setAnalysisProgress(25);
+        setLookupPhase("searching");
+
+        const result = await analyzeScan(
+          { scan_type: "barcode", barcode },
+          profile,
+          (quickResult) => {
+            setAnalysisProgress(100);
+            setLookupPhase("searching");
+            setCurrentScanResult(quickResult);
+          },
+        );
+
+        setAnalysisProgress(100);
+        setScanState("complete");
+        presentScanResult(result);
+        void loadAlternativesForResult(result);
+        void persistScanResult(result);
+      } catch (err) {
+        console.warn("[scan-auto] Barcode analysis failed:", err);
+        Alert.alert("Scan Error", "Unable to process this barcode. Please try again.");
+      } finally {
+        setIsAnalyzing(false);
+      }
+    };
+
+    void run();
+  }, [barcode, profile, analyzeScan, presentScanResult, loadAlternativesForResult, persistScanResult]);
 
   const handleBarCodeScanned = async (scanEvent: {
     type: string;
@@ -1874,11 +1924,12 @@ const styles = StyleSheet.create({
 });
 
 export default function ScanScreen() {
-  const { previousTab } = useLocalSearchParams<{ previousTab?: string }>();
+  const { previousTab, barcode } = useLocalSearchParams<{ previousTab?: string; barcode?: string }>();
   return (
     <ScanScreenContent
       variant="app"
       previousTab={previousTab ?? "index"}
+      barcode={barcode}
     />
   );
 }

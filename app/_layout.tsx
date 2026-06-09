@@ -1,7 +1,10 @@
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Colors } from "@/constants/theme";
+import { initAuthSessionRecovery } from "@/lib/auth-session";
+import { isInvalidRefreshTokenError } from "@/lib/auth-errors";
 import { isNetworkRequestFailure, shouldRetryQuery } from "@/lib/network-errors";
 import { persistQueryCache, restoreQueryCache } from "@/lib/query-persister";
+import { configureRevenueCat } from "@/lib/revenuecat";
 import {
     Manrope_400Regular,
     Manrope_500Medium,
@@ -25,6 +28,9 @@ const originalHandler = (globalThis as any).ErrorUtils?.getGlobalHandler?.();
 if ((globalThis as any).ErrorUtils) {
   (globalThis as any).ErrorUtils.setGlobalHandler(
     (error: any, isFatal?: boolean) => {
+      if (isInvalidRefreshTokenError(error)) {
+        return;
+      }
       if (!isFatal && isNetworkRequestFailure(error)) {
         // Silently swallow non-fatal network errors
         return;
@@ -39,12 +45,13 @@ const _origConsoleError = console.error;
 console.error = (...args: any[]) => {
   if (
     args.length > 0 &&
-    (isNetworkRequestFailure(args[0]) ||
+    (isInvalidRefreshTokenError(args[0]) ||
+      isNetworkRequestFailure(args[0]) ||
       (typeof args[0] === "string" &&
         /network request failed/i.test(args[0])))
   ) {
     // Downgrade to warn so it doesn't trigger LogBox
-    console.warn("[network]", ...args);
+    console.warn("[auth/network]", ...args);
     return;
   }
   _origConsoleError(...args);
@@ -62,28 +69,6 @@ const queryClient = new QueryClient({
   },
 });
 
-type SuperwallProviderProps = {
-  apiKeys: {
-    ios: string | undefined;
-    android: string | undefined;
-  };
-  onConfigurationError: (error: unknown) => void;
-  children: React.ReactNode;
-};
-
-let RuntimeSuperwallProvider: React.ComponentType<SuperwallProviderProps> | null =
-  null;
-try {
-  const superwall = require("expo-superwall") as {
-    SuperwallProvider?: React.ComponentType<SuperwallProviderProps>;
-  };
-  if (superwall.SuperwallProvider) {
-    RuntimeSuperwallProvider = superwall.SuperwallProvider;
-  }
-} catch {
-  RuntimeSuperwallProvider = null;
-}
-
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Manrope_400Regular,
@@ -100,6 +85,16 @@ export default function RootLayout() {
       restored.current = true;
       restoreQueryCache(queryClient);
     }
+  }, []);
+
+  // Initialize RevenueCat early so paywall + entitlement checks are ready.
+  useEffect(() => {
+    void configureRevenueCat();
+  }, []);
+
+  // Clear ghost sessions when refresh tokens are invalid server-side.
+  useEffect(() => {
+    return initAuthSessionRecovery();
   }, []);
 
   // Persist cache periodically when queries update
@@ -123,7 +118,7 @@ export default function RootLayout() {
     );
   }
 
-  const appContent = (
+  return (
     <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -136,12 +131,12 @@ export default function RootLayout() {
         >
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="paywall" />
+          <Stack.Screen name="paywall" options={{ gestureEnabled: false }} />
           <Stack.Screen name="scan-result" />
           <Stack.Screen name="create-account" />
-          <Stack.Screen name="try-free" />
-          <Stack.Screen name="reminder-promise" />
-          <Stack.Screen name="trial-timeline" />
+          <Stack.Screen name="try-free" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="reminder-promise" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="trial-timeline" options={{ gestureEnabled: false }} />
           <Stack.Screen name="gut-score" />
           <Stack.Screen name="improve-gut" />
           <Stack.Screen name="onboarding" />
@@ -153,23 +148,5 @@ export default function RootLayout() {
       </GestureHandlerRootView>
     </QueryClientProvider>
     </ErrorBoundary>
-  );
-
-  if (!RuntimeSuperwallProvider) {
-    return appContent;
-  }
-
-  return (
-    <RuntimeSuperwallProvider
-      apiKeys={{
-        ios: process.env.EXPO_PUBLIC_SUPERWALL_IOS_KEY,
-        android: process.env.EXPO_PUBLIC_SUPERWALL_ANDROID_KEY,
-      }}
-      onConfigurationError={(error: unknown) => {
-        console.error("Superwall configuration error:", error);
-      }}
-    >
-      {appContent}
-    </RuntimeSuperwallProvider>
   );
 }

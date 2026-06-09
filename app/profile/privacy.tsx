@@ -60,7 +60,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     body: [
       "We share data only with service providers/processors needed to run Gutsy, such as cloud hosting/database, AI analysis providers, and product/barcode data providers.",
       "We do not sell your personal information.",
-      "If subscriptions/paywalls are enabled, we may use providers such as Superwall to operate subscription experiences.",
+      "If subscriptions/paywalls are enabled, we use RevenueCat + the app stores to operate subscription experiences.",
     ],
   },
   {

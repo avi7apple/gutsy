@@ -9,8 +9,10 @@ import {
 } from "@/constants/theme";
 import { useAuthUserQuery } from "@/lib/hooks/use-auth-user-query";
 import { rf, rs } from "@/lib/hooks/use-responsive";
+import { useRestorePurchases } from "@/lib/hooks/use-restore-purchases";
 import { shouldRetryQuery } from "@/lib/network-errors";
 import { getOnboardingProfile } from "@/lib/onboarding-storage";
+import { logOutRevenueCatUser } from "@/lib/revenuecat";
 import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -110,6 +112,7 @@ export default function ProfileScreen() {
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const showInitialSkeleton = isAuthLoading && !userData;
+  const { restoring, handleRestore } = useRestorePurchases(router);
 
   useEffect(() => {
     getOnboardingProfile().then(setOnboardingProfile);
@@ -142,54 +145,42 @@ export default function ProfileScreen() {
                   style: "destructive",
                   onPress: async () => {
                     try {
-                      // Get current user
                       const { data: { user } } = await supabase.auth.getUser();
                       if (!user) {
                         throw new Error("No user found");
                       }
 
-                      // Delete user data from database
-                      const { error: deleteError } = await supabase
-                        .from("user_profiles")
-                        .delete()
-                        .eq("id", user.id);
-
-                      if (deleteError) {
-                        throw deleteError;
-                      }
-
-                      // Delete meal scans
-                      await supabase
-                        .from("meal_scans")
-                        .delete()
-                        .eq("user_id", user.id);
-
-                      // Delete user from auth
-                      const { error: authError } = await supabase.auth.admin.deleteUser(
-                        user.id
+                      // Hand off to the `delete-account` Edge Function so it
+                      // can use the service-role key to actually delete the
+                      // auth.users row (the anon key cannot). FK cascades
+                      // wipe user_profiles + meal_scans + everything else.
+                      const { data, error: fnError } = await supabase.functions.invoke(
+                        "delete-account",
+                        { method: "POST" },
                       );
 
-                      if (authError) {
-                        // If admin delete fails, try regular sign out
-                        await supabase.auth.signOut();
-                        Alert.alert(
-                          "Account Deleted",
-                          "Your account data has been deleted. You've been signed out."
-                        );
-                      } else {
-                        Alert.alert(
-                          "Account Deleted",
-                          "Your account and all associated data have been permanently deleted."
-                        );
+                      if (fnError || (data && (data as any).error)) {
+                        const message =
+                          fnError?.message ??
+                          (data as any)?.error ??
+                          "Unknown error";
+                        throw new Error(message);
                       }
 
-                      // Navigate to onboarding
+                      await logOutRevenueCatUser();
+                      await supabase.auth.signOut();
+
+                      Alert.alert(
+                        "Account Deleted",
+                        "Your account and all associated data have been permanently deleted.",
+                      );
+
                       router.replace("/onboarding/welcome");
                     } catch (error) {
                       console.error("Error deleting account:", error);
                       Alert.alert(
                         "Error",
-                        "We couldn't delete your account. Please contact support for assistance."
+                        "We couldn't delete your account. Please contact support for assistance.",
                       );
                     }
                   },
@@ -213,6 +204,7 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: async () => {
             await supabase.auth.signOut();
+            await logOutRevenueCatUser();
             router.replace("/onboarding/welcome");
           },
         },
@@ -419,10 +411,9 @@ export default function ProfileScreen() {
               {renderSettingItem({
                 icon: "refresh-outline",
                 label: "Restore Purchases",
-                onPress: () => {
-                  // TODO: Implement restore purchases
-                  Alert.alert("Coming Soon", "Restore purchases will be available soon.");
-                },
+                onPress: handleRestore,
+                value: restoring ? "Restoring…" : undefined,
+                showChevron: false,
               })}
             </View>
 

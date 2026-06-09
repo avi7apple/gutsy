@@ -19,6 +19,7 @@ import { analyzeIngredients, type IngredientAnalysisResult } from "@/lib/ingredi
 import { getCommercialFoodNutrition, type NutritionixNutrition } from "@/lib/nutritionix-api";
 import type { OnboardingProfile } from "@/lib/onboarding-storage";
 import { lookupProduct, searchOFFByTerm, searchProductByName, type ProductInfo } from "@/lib/product-lookup";
+import { buildProductInsight } from "@/lib/product-insight-generation";
 import { computeScores, type ComputedScores } from "@/lib/scoring-engine";
 import { getIngredientNutrition, type USDANutrition } from "@/lib/usda-database";
 import type {
@@ -2042,13 +2043,27 @@ async function processProductPhotoScan(
     summary: baseResult.analysis.summary,
     tips: [],
   };
+  let productInsight: Awaited<ReturnType<typeof buildProductInsight>> | undefined;
   try {
-    analysis = await generateAnalysisText(scoringProduct, scores, profile);
+    const [analysisResult, insightResult] = await Promise.all([
+      generateAnalysisText(scoringProduct, scores, profile),
+      buildProductInsight(scoringProduct, scores, profile, parsedIngredients),
+    ]);
+    analysis = analysisResult;
+    productInsight = insightResult;
   } catch (llmErr) {
     const msg = llmErr instanceof Error ? llmErr.message : String(llmErr);
     if (!isQuotaError(msg)) {
       console.warn("[analyze-scan] Photo product LLM explanation failed, using defaults:", msg);
     }
+    try {
+      analysis = await generateAnalysisText(scoringProduct, scores, profile);
+    } catch {
+      /* keep defaults */
+    }
+    productInsight = await buildProductInsight(scoringProduct, scores, profile, parsedIngredients).catch(
+      () => undefined,
+    );
   }
 
   return {
@@ -2064,10 +2079,9 @@ async function processProductPhotoScan(
       goalPrediction: analysis.goalPrediction,
       personalizedInsights: analysis.personalizedInsights,
       ingredientAnalysis: analysis.ingredientAnalysis,
-      serving_size_display:
-        baseResult.analysis.serving_size_display,
-      servings_per_container:
-        baseResult.analysis.servings_per_container,
+      productInsight,
+      serving_size_display: baseResult.analysis.serving_size_display,
+      servings_per_container: baseResult.analysis.servings_per_container,
     },
   };
 }
@@ -2277,18 +2291,32 @@ export async function analyzeScan(
         // 4. Show result immediately (before LLM)
         if (onQuickResult) onQuickResult(baseResult);
 
-        // 5. Get LLM explanations (non-critical — fallback if it fails)
+        // 5. Get LLM explanations + product insight (non-critical — fallback if they fail)
         let analysis: AnalysisText = {
           summary: baseResult.analysis.summary,
           tips: [],
         };
+        let productInsight: Awaited<ReturnType<typeof buildProductInsight>> | undefined;
         try {
-          analysis = await generateAnalysisText(product, scores, profile);
+          const [analysisResult, insightResult] = await Promise.all([
+            generateAnalysisText(product, scores, profile),
+            buildProductInsight(product, scores, profile, parsedIngredients),
+          ]);
+          analysis = analysisResult;
+          productInsight = insightResult;
         } catch (llmErr) {
           const msg = llmErr instanceof Error ? llmErr.message : String(llmErr);
           if (!isQuotaError(msg)) {
             console.warn("[analyze-scan] LLM explanation failed, using defaults:", msg);
           }
+          try {
+            analysis = await generateAnalysisText(product, scores, profile);
+          } catch {
+            /* keep defaults */
+          }
+          productInsight = await buildProductInsight(product, scores, profile, parsedIngredients).catch(
+            () => undefined,
+          );
         }
 
         // 6. Return enriched result with LLM analysis
@@ -2305,6 +2333,7 @@ export async function analyzeScan(
             goalPrediction: analysis.goalPrediction,
             personalizedInsights: analysis.personalizedInsights,
             ingredientAnalysis: analysis.ingredientAnalysis,
+            productInsight,
             serving_size_display: product.serving_size_display,
             servings_per_container: product.servings_per_container,
           },

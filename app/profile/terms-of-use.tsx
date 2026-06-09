@@ -88,7 +88,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     body: [
       "If paid plans or subscription features are offered, additional pricing and billing terms will apply at purchase.",
       "App store billing terms and refund rules may also apply.",
-      "Restore purchases and paywall functionality may be provided through third-party tools (for example, Superwall and app store infrastructure).",
+      "Restore purchases and paywall functionality are handled through RevenueCat and native app store infrastructure.",
     ],
   },
   {

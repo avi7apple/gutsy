@@ -1,26 +1,29 @@
 import { BorderRadius, Colors, Fonts, Shadows, Spacing } from "@/constants/theme";
+import { useBlockBack } from "@/lib/hooks/use-block-back";
+import { recordPaywallFunnelStep } from "@/lib/subscription-access";
+import { supabase } from "@/lib/supabase";
 import { rf, rs, useBreakpoint } from "@/lib/hooks/use-responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import {
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withSpring,
-  withTiming,
+    Easing,
+    interpolate,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withRepeat,
+    withSequence,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
 
 const BELL_SIZE = 120;
@@ -45,6 +48,18 @@ export default function ReminderPromiseScreen() {
   const breakpoint = useBreakpoint();
   const isSmallScreen = breakpoint === "small";
   const isCompactScreen = breakpoint === "small" || breakpoint === "medium";
+  useBlockBack();
+
+  useEffect(() => {
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await recordPaywallFunnelStep(user.id, "reminder_promise");
+      }
+    })();
+  }, []);
 
   const bellSize = isSmallScreen ? rs(BELL_SIZE * 0.85) : rs(BELL_SIZE);
   const ringOuterSize = isSmallScreen ? rs(RING_OUTER * 0.9) : rs(RING_OUTER);
@@ -156,9 +171,6 @@ export default function ReminderPromiseScreen() {
   }));
 
   const handleBack = () => router.back();
-  const handleRestore = () => {
-    /* TODO: restore purchases */
-  };
   const handleContinue = () => router.push("/trial-timeline");
 
   return (
@@ -173,13 +185,6 @@ export default function ReminderPromiseScreen() {
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleRestore}
-            style={[styles.navBtn, isSmallScreen && styles.navBtnTight]}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={[styles.restoreText, isSmallScreen && styles.restoreTextTight]}>Restore</Text>
           </TouchableOpacity>
         </View>
 
@@ -294,7 +299,6 @@ const styles = StyleSheet.create({
   },
   nav: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
   },
   navCompact: {
@@ -305,14 +309,6 @@ const styles = StyleSheet.create({
   },
   navBtnTight: {
     padding: Spacing.xs,
-  },
-  restoreText: {
-    fontFamily: Fonts.body,
-    fontSize: rf(16),
-    color: Colors.textMuted,
-  },
-  restoreTextTight: {
-    fontSize: rf(14),
   },
   headline: {
     fontFamily: Fonts.cardTitle,

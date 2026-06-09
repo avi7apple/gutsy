@@ -1,18 +1,19 @@
 import { BorderRadius, Colors, Fonts, Shadows } from "@/constants/theme";
-import { getRedirectUri, signInWithOAuth, syncOnboardingToAccount } from "@/lib/auth";
+import { finalizePostAuth, getRedirectUri, signInWithProvider, syncOnboardingToAccount } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  Linking,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Linking,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 // ─── Scaling system ────────────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ export default function CreateAccountScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState<"apple" | "google" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(true);
 
   const handleOAuthRedirect = useCallback(async (url: string) => {
     const redirectTo = getRedirectUri();
@@ -39,7 +41,6 @@ export default function CreateAccountScreen() {
     const refresh_token = params.refresh_token;
     if (!access_token || !refresh_token) return;
 
-    const { supabase } = await import("@/lib/supabase");
     const { error: sessionError } = await supabase.auth.setSession({
       access_token,
       refresh_token,
@@ -50,7 +51,35 @@ export default function CreateAccountScreen() {
     }
     setLoading(null);
     await syncOnboardingToAccount();
-    router.replace("/(tabs)" as any);
+    await finalizePostAuth(router);
+  }, [router]);
+
+  // If the user landed here while already authenticated (e.g. they signed
+  // in via the welcome page, went through onboarding, and just completed a
+  // purchase), skip the sign-in UI entirely and finalize routing instead of
+  // making them re-authenticate.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (user) {
+          await syncOnboardingToAccount();
+          await finalizePostAuth(router);
+          return;
+        }
+      } catch (err) {
+        console.warn("create-account auth bootstrap failed:", err);
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -65,7 +94,7 @@ export default function CreateAccountScreen() {
     setError(null);
     setLoading(provider);
     try {
-      const { error: err } = await signInWithOAuth(provider);
+      const { error: err } = await signInWithProvider(provider);
       if (err) {
         setError(err.message);
         setLoading(null);
@@ -73,12 +102,22 @@ export default function CreateAccountScreen() {
       }
       await syncOnboardingToAccount();
       setLoading(null);
-      router.replace("/(tabs)" as any);
+      await finalizePostAuth(router);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign in failed");
       setLoading(null);
     }
   };
+
+  if (bootstrapping) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.bootstrapState}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -179,6 +218,11 @@ const styles = StyleSheet.create({
   titleContainer: {
     alignItems: "center",
     marginBottom: s(8),
+  },
+  bootstrapState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoSection: {
     flex: 1,

@@ -217,7 +217,7 @@ export default function ScanResultScreen() {
             ingredients: ingredients.length > 0 ? ingredients : undefined,
           };
           setResult(scanResult);
-          setSaved(true);
+          setSaved(data.is_favorite === true);
           setLoggedAsEaten(data.logged_as_eaten === true);
           setSavedAlternatives(normalizeAlternatives(data.alternatives));
         }

@@ -100,6 +100,58 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function gutsyScoreToHealthGrade(score: number): "Excellent" | "Good" | "Okay" | "Poor" | "Avoid" {
+  if (score >= 80) return "Excellent";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Okay";
+  if (score >= 35) return "Poor";
+  return "Avoid";
+}
+
+function buildDefaultProductInsight(result: Partial<ScanResult>): any {
+  const productName = (typeof result.product_name === "string" && result.product_name.trim()) || result.food_name || "Scanned Product";
+  const brandName = result.manufacturer || "Unknown brand";
+  const gutsyScore = typeof result.gut_score === "number" ? Math.round(result.gut_score) : 50;
+  const healthGrade = gutsyScoreToHealthGrade(gutsyScore);
+
+  return {
+    productName,
+    brandName,
+    parentCompany: undefined,
+    productImageUrl: result.image_url || undefined,
+    gutsyScore,
+    healthGrade,
+    gutReaction:
+      gutsyScore >= 70
+        ? "This product looks solid for your overall health profile."
+        : gutsyScore >= 40
+          ? "This product may have mixed effects depending on your overall diet and timing."
+          : "This product may be a less ideal choice for your overall health profile.",
+    hasActiveRecall: false,
+    recallUrl: undefined,
+    atAGlance: {
+      additivesCount: 0,
+      seedOils: null,
+      processingLevel: "NOVA 1–2 (Minimally processed)",
+      sugarAliasCount: 0,
+      allergens: [],
+      packaging: "Paper/cardboard",
+      realFoodRatio: 80,
+    },
+    ingredients: [],
+    healthFlags: [],
+    alternatives: [],
+  };
+}
+
+function attachProductInsight(result: ScanResult): ScanResult {
+  if (!result?.analysis) return result;
+  const existing = (result.analysis as any).productInsight;
+  if (existing) return result;
+  (result.analysis as any).productInsight = buildDefaultProductInsight(result);
+  return result;
+}
+
 const SCAN_RESULT_JSON_SCHEMA = `Respond with exactly one JSON object, no markdown or extra text, with these keys (all required): food_name (string), product_name (string, full product name e.g. "Lay's Classic Potato Chips" not generic "potato chips"), manufacturer (string, brand/company e.g. "Frito-Lay"), identified_foods (array of strings), gut_score (0-100 number), bloat_score (0-100 number, lower = less bloating), skin_score (0-10 number), energy_score (0-10 number), digestion_score (0-10 number), analysis (object with: summary string, tips array of strings, skin string, digestion string, mood string, bloatDetails object {expectedTime string estimating when bloating will occur based on THIS specific product e.g. "2-3 hours" or "4-6 hours" or "6-8 hours" - be specific to the product content, tip string personalized tip for THIS product}, impactDetails object {skin object {description string specific to THIS product, learnMore object {title string, content string, sensitivity string}}, bloating object {description string specific to THIS product, learnMore object {title string, content string, timing string}}, digestion object {description string specific to THIS product, learnMore object {title string, content string}}, energy object {description string specific to THIS product, learnMore object {title string, content string}}}, goalPrediction object {forecast array of {time string, risk string, description string}, improvements array of {action string, newScore string, impact string}}, personalizedInsights array of 3 objects personalized to THIS specific product with: type "trigger"|"quick_win"|"pattern"|"great_choice"|"warning", title string, detail string specific to THIS product content, tip string optional, stat string optional, swap object optional {from string, to string, scoreChange string}, progress object optional {current number, total number, unlock string}), nutrition (object with optional keys: calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg), image_url (string, optional - if you can provide a publicly accessible image URL for this product/meal, include it; otherwise use empty string ""). Output valid JSON only: no trailing commas, no unescaped newlines inside string values.`;
 
 function extractJsonFromText(text: string): string {
@@ -450,10 +502,15 @@ Deno.serve(async (req) => {
         try {
           const llm = await callGroqVision(imageBase64, mimeType, profile);
           const result = normalizeResult(llm, "photo", image_url ? { image_url } : {});
+          attachProductInsight(result);
           return jsonResponse(result);
         } catch (photoErr) {
           const msg = photoErr instanceof Error ? photoErr.message : String(photoErr);
-          if (isQuotaError(msg)) return jsonResponse(mockScanResult("photo", image_url ? { image_url } : {}));
+          if (isQuotaError(msg)) {
+            const mock = mockScanResult("photo", image_url ? { image_url } : {});
+            attachProductInsight(mock);
+            return jsonResponse(mock);
+          }
           throw photoErr;
         }
       }
@@ -474,6 +531,7 @@ Deno.serve(async (req) => {
           // #region agent log
           fetch('http://127.0.0.1:7242/ingest/025d8125-b3f8-4cbb-a462-51b42cebb67c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyze-scan/index.ts:336',message:'Final result before sending',data:{foodName:result.food_name,hasError:!!(result as any).error,errorField:(result as any).error},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
           // #endregion
+          attachProductInsight(result);
           return jsonResponse(result);
         } catch (barcodeErr) {
           console.error("[DEBUG] Edge Function - Barcode scan error:", barcodeErr);
@@ -482,7 +540,9 @@ Deno.serve(async (req) => {
           const msg = barcodeErr instanceof Error ? barcodeErr.message : String(barcodeErr);
           if (isQuotaError(msg)) {
             console.log("[DEBUG] Edge Function - Quota error detected, returning mock result");
-            return jsonResponse(mockScanResult("barcode", { barcode }));
+            const mock = mockScanResult("barcode", { barcode });
+            attachProductInsight(mock);
+            return jsonResponse(mock);
           }
           // Return error as JSON response instead of throwing
           return jsonResponse({ error: msg }, 500);
@@ -496,7 +556,9 @@ Deno.serve(async (req) => {
       const message = e instanceof Error ? e.message : String(e);
       if (isQuotaError(message)) {
         console.log("[DEBUG] Edge Function - Quota error in inner catch, returning mock");
-        return jsonResponse(mockScanResult(scan_type, barcode ? { barcode } : {}));
+        const mock = mockScanResult(scan_type, barcode ? { barcode } : {});
+        attachProductInsight(mock);
+        return jsonResponse(mock);
       }
       return jsonResponse({ error: message, details: e instanceof Error ? e.stack : String(e) }, 500);
     }

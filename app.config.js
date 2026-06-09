@@ -10,7 +10,11 @@ const { expo } = appJson;
 module.exports = {
   ...expo,
   extra: {
+    ...(expo.extra || {}),
     EXPO_PUBLIC_USDA_FDC_API_KEY: process.env.EXPO_PUBLIC_USDA_FDC_API_KEY || "",
     EXPO_PUBLIC_BARCODE_LOOKUP_API_KEY: process.env.EXPO_PUBLIC_BARCODE_LOOKUP_API_KEY || "",
+    eas: {
+      projectId: "caf41175-44c3-4e77-85fa-c2bd6fe6467a",
+    },
   },
 };

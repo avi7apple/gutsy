@@ -1,7 +1,8 @@
 import OnboardingButton from "@/components/onboarding/OnboardingButton";
 import { BorderRadius, Colors, Fonts, OnboardingButtonBar, Shadows, Spacing } from "@/constants/theme";
-import { signInWithOAuth, syncOnboardingToAccount } from "@/lib/auth";
+import { finalizePostAuth, signInWithProvider, syncOnboardingToAccount } from "@/lib/auth";
 import { rf, rs } from "@/lib/hooks/use-responsive";
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
@@ -30,6 +31,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const SHEET_HEIGHT = rs(220);
+const NEW_ACCOUNT_SHEET_HEIGHT = rs(360);
 
 const MIN_IMAGE_WIDTH = rs(280);
 const MIN_IMAGE_HEIGHT = rs(200);
@@ -42,8 +44,11 @@ export default function WelcomeScreen() {
   const [sheetClosing, setSheetClosing] = useState(false);
   const [loading, setLoading] = useState<"apple" | "google" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showNewAccountSheet, setShowNewAccountSheet] = useState(false);
+  const [newAccountSheetClosing, setNewAccountSheetClosing] = useState(false);
 
   const sheetTranslateY = useSharedValue(SHEET_HEIGHT);
+  const newAccountTranslateY = useSharedValue(NEW_ACCOUNT_SHEET_HEIGHT);
 
   // Animation values
   const logoOpacity = useSharedValue(0);
@@ -147,8 +152,22 @@ export default function WelcomeScreen() {
     }
   }, [showSignInSheet]);
 
+  useEffect(() => {
+    if (showNewAccountSheet) {
+      setNewAccountSheetClosing(false);
+      newAccountTranslateY.value = withTiming(0, {
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+      });
+    }
+  }, [showNewAccountSheet]);
+
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetTranslateY.value }],
+  }));
+
+  const newAccountSheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: newAccountTranslateY.value }],
   }));
 
   // Animated styles
@@ -199,20 +218,70 @@ export default function WelcomeScreen() {
     );
   };
 
+  const closeNewAccountSheet = (onClosed?: () => void) => {
+    setNewAccountSheetClosing(true);
+    newAccountTranslateY.value = withTiming(
+      NEW_ACCOUNT_SHEET_HEIGHT,
+      { duration: 240 },
+      (finished) => {
+        if (finished) {
+          runOnJS(setShowNewAccountSheet)(false);
+          runOnJS(setNewAccountSheetClosing)(false);
+          if (onClosed) runOnJS(onClosed)();
+        }
+      }
+    );
+  };
+
+  const handleStartOnboarding = () => {
+    closeNewAccountSheet(() => {
+      router.push("/onboarding/analyze-first" as Href);
+    });
+  };
+
   const handleSignInWithProvider = async (provider: "apple" | "google") => {
     setError(null);
     setLoading(provider);
     try {
-      const { error: err } = await signInWithOAuth(provider);
+      const { error: err } = await signInWithProvider(provider);
       if (err) {
         setError(err.message);
         setLoading(null);
         return;
       }
+
+      // Check whether this OAuth account already has a Gutsy profile with
+      // completed onboarding. If not, treat it as a fresh sign-up and steer
+      // the user into the onboarding funnel via the welcome sheet below.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      let hasExistingAccount = false;
+      if (user) {
+        try {
+          const { data } = await supabase
+            .from("user_profiles")
+            .select("onboarding")
+            .eq("id", user.id)
+            .single();
+          hasExistingAccount = Boolean(
+            (data?.onboarding as { goal?: unknown } | null)?.goal,
+          );
+        } catch (lookupErr) {
+          console.warn("user_profiles lookup failed:", lookupErr);
+        }
+      }
+
       await syncOnboardingToAccount();
       setLoading(null);
-      setShowSignInSheet(false);
-      router.replace("/(tabs)" as any);
+
+      if (hasExistingAccount) {
+        setShowSignInSheet(false);
+        await finalizePostAuth(router);
+      } else {
+        setShowSignInSheet(false);
+        setShowNewAccountSheet(true);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign in failed");
       setLoading(null);
@@ -338,6 +407,43 @@ export default function WelcomeScreen() {
               </View>
             </View>
           </TouchableWithoutFeedback>
+        </Animated.View>
+      </Modal>
+
+      <Modal
+        visible={showNewAccountSheet || newAccountSheetClosing}
+        transparent
+        animationType="none"
+        onRequestClose={() => closeNewAccountSheet()}
+      >
+        <View style={styles.sheetBackdrop} />
+        <Animated.View
+          style={[
+            styles.newAccountSheetContainer,
+            { paddingBottom: Math.max(insets.bottom, Spacing.lg) },
+            newAccountSheetAnimatedStyle,
+          ]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.newAccountSheetContent}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.newAccountIconWrap}>
+              <Ionicons name="sparkles" size={28} color={Colors.primary} />
+            </View>
+            <Text style={styles.newAccountHeading}>Welcome to Gutsy!</Text>
+            <Text style={styles.newAccountBody}>
+              Looks like you don&apos;t have an account yet. Let&apos;s set you
+              up with a personalized gut health plan — it only takes a couple
+              of minutes.
+            </Text>
+            <TouchableOpacity
+              style={styles.newAccountPrimaryBtn}
+              onPress={handleStartOnboarding}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.newAccountPrimaryBtnText}>Get Started</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </Modal>
     </View>
@@ -497,5 +603,63 @@ const styles = StyleSheet.create({
   },
   googleBtnText: {
     color: "#374151",
+  },
+
+  // New-account bottom sheet
+  newAccountSheetContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    backgroundColor: Colors.background,
+    ...Shadows.lg,
+  },
+  newAccountSheetContent: {
+    paddingHorizontal: rs(Spacing.xxl),
+    paddingTop: rs(Spacing.md),
+    paddingBottom: rs(Spacing.lg),
+    alignItems: "center",
+  },
+  newAccountIconWrap: {
+    width: rs(56),
+    height: rs(56),
+    borderRadius: rs(28),
+    backgroundColor: `${Colors.primary}1A`,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: rs(Spacing.md),
+    marginBottom: rs(Spacing.lg),
+  },
+  newAccountHeading: {
+    fontFamily: Fonts.pageTitle,
+    fontSize: rf(22),
+    color: Colors.text,
+    textAlign: "center",
+    marginBottom: rs(Spacing.sm),
+  },
+  newAccountBody: {
+    fontFamily: Fonts.body,
+    fontSize: rf(15),
+    lineHeight: rf(22),
+    color: Colors.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: rs(Spacing.sm),
+    marginBottom: rs(Spacing.xl),
+  },
+  newAccountPrimaryBtn: {
+    width: "100%",
+    paddingVertical: rs(Spacing.lg),
+    borderRadius: rs(BorderRadius.lg),
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Shadows.md,
+  },
+  newAccountPrimaryBtnText: {
+    fontFamily: Fonts.pageTitle,
+    fontSize: rf(17),
+    color: "#FFF",
   },
 });
