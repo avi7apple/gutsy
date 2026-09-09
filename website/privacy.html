@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Gutsy</title>
+  <meta name="description" content="Gutsy Privacy Policy — how we collect, use, and protect your information.">
+  <link rel="icon" href="assets/logo1.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary:       #325C3A;
+      --primary-light: #3D6E46;
+      --primary-dark:  #1C2E20;
+      --accent-pale:   #EAF3DE;
+      --cream:         #FAF7F0;
+      --bg:            #FAF7F0;
+      --white:         #FFFFFF;
+      --text:          #22301F;
+      --text-2:        #55645A;
+      --text-3:        #8A9A8D;
+      --border:        #E0E8E2;
+      --border-light:  #EEF2EF;
+      --serif: 'Fraunces', Georgia, serif;
+    }
+    body {
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(250, 247, 240, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-light);
+    }
+    .nav-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo-link {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      text-decoration: none;
+    }
+    .logo-link img { width: 29px; height: 29px; object-fit: contain; }
+    .logo-link .wordmark { font-family: var(--serif); font-size: 21px; font-weight: 600; color: var(--primary-dark); letter-spacing: -0.4px; }
+    .nav-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-2);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .nav-back:hover { color: var(--primary); }
+    .nav-back svg { transition: transform 0.15s; }
+    .nav-back:hover svg { transform: translateX(-2px); }
+
+    /* PAGE */
+    .page-wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 64px 32px 96px;
+    }
+    .page-header {
+      margin-bottom: 48px;
+    }
+    .page-label {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 2.2px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .page-label::before {
+      content: '';
+      width: 24px;
+      height: 1.5px;
+      background: #8EB66D;
+    }
+    .page-header h1 {
+      font-family: var(--serif);
+      font-size: clamp(34px, 5vw, 52px);
+      font-weight: 500;
+      letter-spacing: -1px;
+      color: var(--primary-dark);
+      margin-bottom: 12px;
+    }
+    .page-header p {
+      font-size: 16px;
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .last-updated {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--text-3);
+      font-weight: 500;
+    }
+
+    .intro-card {
+      background: var(--white);
+      border: 1px solid rgba(50, 92, 58, 0.08);
+      border-radius: 18px;
+      padding: 28px 32px;
+      margin-bottom: 16px;
+    }
+    .intro-card h2 {
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--primary-dark);
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+    .intro-card p {
+      font-size: 15px;
+      color: var(--text-2);
+      line-height: 1.68;
+    }
+
+    .sections { display: flex; flex-direction: column; gap: 12px; }
+
+    .section-card {
+      background: var(--white);
+      border: 1px solid rgba(50, 92, 58, 0.08);
+      border-radius: 18px;
+      padding: 28px 32px;
+    }
+    .section-card h3 {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--primary-dark);
+      margin-bottom: 12px;
+      letter-spacing: -0.2px;
+    }
+    .section-card p {
+      font-size: 15px;
+      color: var(--text-2);
+      line-height: 1.68;
+      margin-bottom: 10px;
+    }
+    .section-card p:last-child { margin-bottom: 0; }
+
+    footer {
+      background: var(--primary-dark);
+      padding: 36px 32px;
+    }
+    .footer-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    .footer-logo img {
+      width: 22px; height: 22px; object-fit: contain;
+      filter: brightness(0) invert(1) opacity(0.55);
+    }
+    .footer-logo .wordmark { font-family: var(--serif); font-size: 18px; font-weight: 600; color: rgba(250,247,240,0.75); }
+    .footer-links { display: flex; gap: 24px; list-style: none; }
+    .footer-links a {
+      color: rgba(255,255,255,0.45);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: color 0.15s;
+    }
+    .footer-links a:hover { color: rgba(255,255,255,0.85); }
+    .footer-copy { font-size: 12px; color: rgba(255,255,255,0.3); font-weight: 500; }
+
+    @media (max-width: 600px) {
+      .nav-inner { padding: 14px 20px; }
+      .page-wrap { padding: 48px 20px 72px; }
+      .section-card, .intro-card { padding: 22px 20px; }
+      footer { padding: 28px 20px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+      .footer-links { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="logo-link">
+        <img src="assets/logo1.png" alt="" onerror="this.style.display='none'">
+        <span class="wordmark">gutsy</span>
+      </a>
+      <a href="/" class="nav-back">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Back to home
+      </a>
+    </div>
+  </nav>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div class="page-label">Legal</div>
+      <h1>Privacy Policy</h1>
+      <p>This policy explains how Gutsy collects, uses, and protects your information.</p>
+      <span class="last-updated">Last updated: March 7, 2026</span>
+    </div>
+
+    <div class="intro-card">
+      <h2>Your Privacy Matters</h2>
+      <p>Gutsy is operated by Abhilokeet Sherchan. We built Gutsy to help you understand what's in your food — and we take the same care with your personal data. We never sell your information.</p>
+    </div>
+
+    <div class="sections">
+      <div class="section-card">
+        <h3>1. Who We Are</h3>
+        <p>Gutsy is operated by Abhilokeet Sherchan.</p>
+        <p>If you have privacy questions or requests, contact: <a href="mailto:gutsyai.app@gmail.com" style="color: var(--primary); font-weight: 600;">gutsyai.app@gmail.com</a></p>
+      </div>
+
+      <div class="section-card">
+        <h3>2. Scope</h3>
+        <p>This Privacy Policy explains how we collect, use, store, and share information when you use the Gutsy app, including scan and profile features.</p>
+        <p>By using Gutsy, you agree to this policy.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>3. Information We Collect</h3>
+        <p>Account and profile data: email, name, profile preferences, onboarding answers, and account metadata.</p>
+        <p>Scan data: food/product names, barcode details, analysis results, gut/score fields, and timestamps.</p>
+        <p>Images: product label photos from photo scans may be uploaded and stored securely to support scan results and history.</p>
+        <p>Technical and usage data: app events, diagnostics, and logs needed for reliability and fraud/abuse prevention.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>4. How We Use Information</h3>
+        <p>To provide app functionality (scan analysis, history, profile, and account features).</p>
+        <p>To personalize your experience based on your profile and wellness preferences.</p>
+        <p>To maintain security, troubleshoot issues, and improve product performance.</p>
+        <p>To communicate essential account or service updates.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>5. Legal Bases (EU/EEA/UK Users)</h3>
+        <p>Where required, we process personal data under one or more legal bases: performance of a contract, legitimate interests, legal obligations, and consent.</p>
+        <p>You can request details about the legal basis for specific processing by contacting us.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>6. How We Share Information</h3>
+        <p>We share data only with service providers/processors needed to run Gutsy, such as cloud hosting/database, AI analysis providers, and product/barcode data providers.</p>
+        <p>We do not sell your personal information.</p>
+        <p>If subscriptions/paywalls are enabled, we use RevenueCat and the app stores to operate subscription experiences.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>7. Storage, Security, and Retention</h3>
+        <p>We use technical and organizational safeguards designed to protect data, but no system is 100% secure.</p>
+        <p>We retain information for as long as needed to provide the service and meet legal, accounting, and security obligations.</p>
+        <p>When data is no longer needed, we delete or de-identify it where practical.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>8. Your Rights and Choices</h3>
+        <p>In-app controls let you manage and delete scan records.</p>
+        <p>In-app account deletion is available in the app account controls.</p>
+        <p>You may also request access, correction, deletion, portability, or restriction/objection rights by emailing <a href="mailto:gutsyai.app@gmail.com" style="color: var(--primary); font-weight: 600;">gutsyai.app@gmail.com</a>.</p>
+        <p>For California users, we do not sell personal information.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>9. Children's Privacy</h3>
+        <p>Gutsy is intended for users age 13 and older.</p>
+        <p>If you believe data from a child under 13 was provided, contact us and we will review and remove it as appropriate.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>10. International Data Transfers</h3>
+        <p>Gutsy serves users in the United States and may serve users in the EU/EEA/UK.</p>
+        <p>Your information may be processed in countries other than your own, with appropriate safeguards where required by law.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>11. Health Disclaimer</h3>
+        <p>Gutsy provides wellness and nutrition insights for informational purposes only and is not medical advice.</p>
+        <p>Always seek professional medical guidance for diagnosis or treatment decisions.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>12. Changes to This Policy</h3>
+        <p>We may update this policy from time to time.</p>
+        <p>If we make material changes, we will update the Last Updated date and provide notice where required.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>13. Contact</h3>
+        <p>Privacy contact: <a href="mailto:gutsyai.app@gmail.com" style="color: var(--primary); font-weight: 600;">gutsyai.app@gmail.com</a></p>
+        <p>Owner: Abhilokeet Sherchan</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <a href="/" class="footer-logo">
+        <img src="assets/logo1.png" alt="" onerror="this.style.display='none'">
+        <span class="wordmark">gutsy</span>
+      </a>
+      <ul class="footer-links">
+        <li><a href="privacy.html" style="color:rgba(255,255,255,0.75)">Privacy Policy</a></li>
+        <li><a href="terms.html">Terms of Use</a></li>
+        <li><a href="mailto:gutsyai.app@gmail.com">Contact</a></li>
+      </ul>
+      <span class="footer-copy">© 2026 Gutsy. All rights reserved.</span>
+    </div>
+  </footer>
+
+</body>
+</html>

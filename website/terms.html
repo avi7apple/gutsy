@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Use — Gutsy</title>
+  <meta name="description" content="Gutsy Terms of Use — the rules governing your use of the Gutsy app and services.">
+  <link rel="icon" href="assets/logo1.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary:       #325C3A;
+      --primary-dark:  #1C2E20;
+      --accent-pale:   #EAF3DE;
+      --cream:         #FAF7F0;
+      --bg:            #FAF7F0;
+      --white:         #FFFFFF;
+      --text:          #22301F;
+      --text-2:        #55645A;
+      --text-3:        #8A9A8D;
+      --border-light:  #EEF2EF;
+      --serif: 'Fraunces', Georgia, serif;
+    }
+    body {
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(250, 247, 240, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-light);
+    }
+    .nav-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo-link { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+    .logo-link img { width: 29px; height: 29px; object-fit: contain; }
+    .logo-link .wordmark { font-family: var(--serif); font-size: 21px; font-weight: 600; color: var(--primary-dark); letter-spacing: -0.4px; }
+    .nav-back {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 14px; font-weight: 600; color: var(--text-2);
+      text-decoration: none; transition: color 0.15s;
+    }
+    .nav-back:hover { color: var(--primary); }
+    .nav-back:hover svg { transform: translateX(-2px); }
+    .nav-back svg { transition: transform 0.15s; }
+
+    .page-wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 64px 32px 96px;
+    }
+    .page-header { margin-bottom: 48px; }
+    .page-label {
+      font-size: 11.5px; font-weight: 800; color: var(--primary);
+      text-transform: uppercase; letter-spacing: 2.2px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .page-label::before {
+      content: ''; width: 24px; height: 1.5px; background: #8EB66D;
+    }
+    .page-header h1 {
+      font-family: var(--serif);
+      font-size: clamp(34px, 5vw, 52px);
+      font-weight: 500; letter-spacing: -1px; color: var(--primary-dark); margin-bottom: 12px;
+    }
+    .page-header p { font-size: 16px; color: var(--text-2); font-weight: 500; }
+    .last-updated { display: inline-block; margin-top: 12px; font-size: 13px; color: var(--text-3); font-weight: 500; }
+
+    .intro-card {
+      background: var(--white); border: 1px solid rgba(50, 92, 58, 0.08);
+      border-radius: 18px; padding: 28px 32px; margin-bottom: 16px;
+    }
+    .intro-card h2 { font-family: var(--serif); font-size: 20px; font-weight: 500; color: var(--primary-dark); margin-bottom: 8px; letter-spacing: -0.3px; }
+    .intro-card p { font-size: 15px; color: var(--text-2); line-height: 1.68; }
+
+    .sections { display: flex; flex-direction: column; gap: 12px; }
+    .section-card {
+      background: var(--white); border: 1px solid rgba(50, 92, 58, 0.08);
+      border-radius: 18px; padding: 28px 32px;
+    }
+    .section-card h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; color: var(--primary-dark); margin-bottom: 12px; letter-spacing: -0.2px; }
+    .section-card p { font-size: 15px; color: var(--text-2); line-height: 1.68; margin-bottom: 10px; }
+    .section-card p:last-child { margin-bottom: 0; }
+
+    footer { background: var(--primary-dark); padding: 36px 32px; }
+    .footer-inner {
+      max-width: 1120px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+    .footer-logo img { width: 22px; height: 22px; object-fit: contain; filter: brightness(0) invert(1) opacity(0.55); }
+    .footer-logo .wordmark { font-family: var(--serif); font-size: 18px; font-weight: 600; color: rgba(250,247,240,0.75); }
+    .footer-links { display: flex; gap: 24px; list-style: none; }
+    .footer-links a { color: rgba(255,255,255,0.45); text-decoration: none; font-size: 13px; font-weight: 600; transition: color 0.15s; }
+    .footer-links a:hover { color: rgba(255,255,255,0.85); }
+    .footer-copy { font-size: 12px; color: rgba(255,255,255,0.3); font-weight: 500; }
+
+    @media (max-width: 600px) {
+      .nav-inner { padding: 14px 20px; }
+      .page-wrap { padding: 48px 20px 72px; }
+      .section-card, .intro-card { padding: 22px 20px; }
+      footer { padding: 28px 20px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+      .footer-links { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="logo-link">
+        <img src="assets/logo1.png" alt="" onerror="this.style.display='none'">
+        <span class="wordmark">gutsy</span>
+      </a>
+      <a href="/" class="nav-back">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Back to home
+      </a>
+    </div>
+  </nav>
+
+  <div class="page-wrap">
+    <div class="page-header">
+      <div class="page-label">Legal</div>
+      <h1>Terms of Use</h1>
+      <p>Please review these terms carefully before using Gutsy.</p>
+      <span class="last-updated">Last updated: March 7, 2026</span>
+    </div>
+
+    <div class="intro-card">
+      <h2>Terms of Use Agreement</h2>
+      <p>These Terms of Use govern your use of the Gutsy app and related services. By using Gutsy, you agree to these Terms and our Privacy Policy. If you do not agree, please do not use the app.</p>
+    </div>
+
+    <div class="sections">
+      <div class="section-card">
+        <h3>1. Acceptance of Terms</h3>
+        <p>These Terms of Use govern your use of the Gutsy app and related services.</p>
+        <p>By using Gutsy, you agree to these Terms and our <a href="privacy.html" style="color:var(--primary);font-weight:600;">Privacy Policy</a>.</p>
+        <p>If you do not agree, do not use the app.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>2. Who Operates Gutsy</h3>
+        <p>Gutsy is operated by Abhilokeet Sherchan.</p>
+        <p>For legal or support questions, contact: <a href="mailto:gutsyai.app@gmail.com" style="color:var(--primary);font-weight:600;">gutsyai.app@gmail.com</a></p>
+      </div>
+
+      <div class="section-card">
+        <h3>3. Eligibility</h3>
+        <p>Gutsy is intended for users age 13 and older.</p>
+        <p>If you are under the age of majority where you live, use Gutsy only with parent or legal guardian involvement as required by law.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>4. Account and Security</h3>
+        <p>You are responsible for maintaining the confidentiality of your account credentials and for activity under your account.</p>
+        <p>You must provide accurate information and keep it updated.</p>
+        <p>We may suspend access to protect the service, users, or legal compliance.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>5. What the Service Does</h3>
+        <p>Gutsy provides food scan and wellness insights, including image/barcode analysis, history, and profile-based personalization.</p>
+        <p>Features may evolve over time, and some features may be added, changed, or removed.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>6. Medical and Health Disclaimer</h3>
+        <p>Gutsy provides informational wellness content only and does not provide medical advice, diagnosis, or treatment.</p>
+        <p>Do not rely on app outputs as a substitute for professional medical judgment.</p>
+        <p>Always consult a qualified healthcare professional for medical decisions.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>7. AI and Data-Driven Outputs</h3>
+        <p>Some outputs are generated using automated systems and third-party providers and may be incomplete, delayed, or inaccurate.</p>
+        <p>You are responsible for how you use scan results, recommendations, and summaries.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>8. User Content and Uploads</h3>
+        <p>You may submit content such as scan images and related inputs.</p>
+        <p>You represent that you have rights to submit that content and that it does not violate law or third-party rights.</p>
+        <p>You grant us a limited license to host, process, and display submitted content only as needed to operate and improve the service.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>9. Acceptable Use</h3>
+        <p>You agree not to misuse the service, including attempting unauthorized access, interfering with app operation, scraping data at scale, reverse engineering where prohibited, or violating law.</p>
+        <p>You must not upload unlawful, abusive, or infringing content.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>10. Subscriptions and Purchases</h3>
+        <p>If paid plans or subscription features are offered, additional pricing and billing terms will apply at purchase.</p>
+        <p>App store billing terms and refund rules may also apply.</p>
+        <p>Restore purchases and paywall functionality are handled through RevenueCat and native app store infrastructure.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>11. Third-Party Services</h3>
+        <p>Gutsy relies on third-party infrastructure and APIs (for example, hosting, AI, and product data providers).</p>
+        <p>We are not responsible for third-party services outside our reasonable control.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>12. Intellectual Property</h3>
+        <p>The app, design, branding, and software components are owned by us or our licensors and are protected by law.</p>
+        <p>Except as allowed by law, you may not copy, modify, distribute, or create derivative works from the service without permission.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>13. Availability and Changes</h3>
+        <p>We may modify, pause, or discontinue features at any time, including for maintenance, security, or compliance reasons.</p>
+        <p>We do not guarantee uninterrupted or error-free service.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>14. Termination</h3>
+        <p>You may stop using the app at any time.</p>
+        <p>We may suspend or terminate access for violations of these Terms, misuse, risk, or legal reasons.</p>
+        <p>Where available, in-app account deletion controls can be used to delete your account.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>15. Disclaimers</h3>
+        <p>The service is provided on an "as is" and "as available" basis to the extent permitted by law.</p>
+        <p>To the maximum extent permitted by law, we disclaim warranties including implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>16. Limitation of Liability</h3>
+        <p>To the maximum extent permitted by law, we are not liable for indirect, incidental, special, consequential, or punitive damages, or loss of profits, data, or goodwill.</p>
+        <p>Our total liability for claims arising from the service is limited to amounts you paid us for the service in the 12 months before the claim, or USD $100 if no payments were made, unless law requires otherwise.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>17. Indemnification</h3>
+        <p>You agree to defend, indemnify, and hold us harmless from claims, damages, and expenses arising from your misuse of the service, your content, or your violation of these Terms or applicable law.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>18. Governing Law and Regional Rights</h3>
+        <p>These Terms are governed by applicable laws, subject to mandatory consumer protections in your jurisdiction.</p>
+        <p>If you are in the EU/EEA/UK, nothing in these Terms limits rights you cannot waive under local law.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>19. Changes to These Terms</h3>
+        <p>We may update these Terms from time to time.</p>
+        <p>If material changes are made, we will update the Last Updated date and provide notice where required.</p>
+      </div>
+
+      <div class="section-card">
+        <h3>20. Contact</h3>
+        <p>Terms contact: <a href="mailto:gutsyai.app@gmail.com" style="color:var(--primary);font-weight:600;">gutsyai.app@gmail.com</a></p>
+        <p>Operator: Abhilokeet Sherchan</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <a href="/" class="footer-logo">
+        <img src="assets/logo1.png" alt="" onerror="this.style.display='none'">
+        <span class="wordmark">gutsy</span>
+      </a>
+      <ul class="footer-links">
+        <li><a href="privacy.html">Privacy Policy</a></li>
+        <li><a href="terms.html" style="color:rgba(255,255,255,0.75)">Terms of Use</a></li>
+        <li><a href="mailto:gutsyai.app@gmail.com">Contact</a></li>
+      </ul>
+      <span class="footer-copy">© 2026 Gutsy. All rights reserved.</span>
+    </div>
+  </footer>
+
+</body>
+</html>
