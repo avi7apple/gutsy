@@ -70,7 +70,8 @@
         }
       ],
       "expo-font",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "@sentry/react-native/expo"
     ],
     "experiments": {
       "typedRoutes": true,

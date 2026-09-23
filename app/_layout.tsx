@@ -5,6 +5,7 @@ import { isInvalidRefreshTokenError } from "@/lib/auth-errors";
 import { isNetworkRequestFailure, shouldRetryQuery } from "@/lib/network-errors";
 import { persistQueryCache, restoreQueryCache } from "@/lib/query-persister";
 import { configureRevenueCat } from "@/lib/revenuecat";
+import { initSentry, Sentry } from "@/lib/sentry";
 import {
     Manrope_400Regular,
     Manrope_500Medium,
@@ -23,6 +24,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 // ── Suppress "Network request failed" from ever showing a red LogBox ──
 LogBox.ignoreLogs(["Network request failed"]);
 
+initSentry();
+
 // ── Catch unhandled promise rejections caused by network errors ──
 const originalHandler = (globalThis as any).ErrorUtils?.getGlobalHandler?.();
 if ((globalThis as any).ErrorUtils) {
@@ -35,6 +38,7 @@ if ((globalThis as any).ErrorUtils) {
         // Silently swallow non-fatal network errors
         return;
       }
+      Sentry.captureException(error);
       originalHandler?.(error, isFatal);
     },
   );
@@ -119,7 +123,7 @@ export default function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onError={(error) => Sentry.captureException(error)}>
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="dark" />
