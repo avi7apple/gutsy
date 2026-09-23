@@ -139,6 +139,10 @@ export function ProductScanResultScreen({
           saved={saved || favorited}
           sharing={sharing}
         />
+        <Text style={styles.disclaimer}>
+          Gutsy provides wellness and nutrition insights for informational
+          purposes only. This is not medical advice.
+        </Text>
       </ScrollView>
 
       <View style={styles.offscreen} pointerEvents="none">
@@ -186,6 +190,13 @@ const styles = StyleSheet.create({
     paddingTop: 6,
   },
   gap: { height: SECTION_GAP },
+  disclaimer: {
+    fontSize: 11,
+    color: ScanResultColors.textMuted,
+    textAlign: "center",
+    lineHeight: 16,
+    marginTop: SECTION_GAP,
+  },
   offscreen: {
     position: "absolute",
     left: -SHARE_CARD_WIDTH - 40,

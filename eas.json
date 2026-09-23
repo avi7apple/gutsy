@@ -12,6 +12,12 @@
       "env": {
         "APP_VARIANT": "development"
       }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production"
+      }
     }
   },
   "submit": {
